@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/ilkin0/gzln/internal/api/routes"
 )
 
 func main() {
@@ -14,6 +15,8 @@ func main() {
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello World!"))
 	})
-	fmt.Println("Web app starting at port :3000!")
-	http.ListenAndServe(":3000", r)
+
+	r.Mount("/files", routes.FileRoutes())
+	fmt.Println("Web app starting at port :8080!")
+	http.ListenAndServe(":8080", r)
 }

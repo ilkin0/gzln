@@ -8,6 +8,8 @@
 **/.classpath
 **/.dockerignore
 **/.env
+**/.env.local
+**/.env.*.local
 **/.git
 **/.gitignore
 **/.project
@@ -28,5 +30,15 @@
 **/obj
 **/secrets.dev.yaml
 **/values.dev.yaml
+
+# Go development tools
+**/.air.toml
+**/tmp/
+**/Makefile
+
+# Local database files
+**/*.db
+
+# Documentation
 LICENSE
 README.md

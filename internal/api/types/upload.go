@@ -2,7 +2,16 @@ package types
 
 import "time"
 
-type InitUploadRequest struct{}
+type InitUploadRequest struct {
+	FileSize int64  `json:"file_size"`
+	MimeType string `json:"mime_type"`
+}
+
+type InitUploadResponse struct {
+	FileID      string `json:"file_id"`
+	UploadToken string `json:"upload_token"`
+	ChunkCount  int64  `json:"chunk_count"`
+}
 
 type UploadResponse struct {
 	FileID      string    `json:"file_id"`

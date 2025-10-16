@@ -7,29 +7,213 @@ package sqlc
 
 import (
 	"context"
+	"net/netip"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getFiles = `-- name: GetFiles :one
-SELECT id, share_id, encrypted_filename, encrypted_mime_type, total_size, chunk_count, chunk_size, status, created_at, expires_at, max_downloads, download_count, last_downloaded_at, deletion_token_hash, uploader_ip FROM files
+const createFile = `-- name: CreateFile :one
+INSERT INTO files (
+    share_id,
+    encrypted_filename,
+    encrypted_mime_type,
+    salt,
+    pbkdf2_iterations,
+    total_size,
+    chunk_count,
+    chunk_size,
+    expires_at,
+    max_downloads,
+    deletion_token_hash,
+    uploader_ip
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+) RETURNING id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
 `
 
-func (q *Queries) GetFiles(ctx context.Context) (File, error) {
-	row := q.db.QueryRow(ctx, getFiles)
+type CreateFileParams struct {
+	ShareID           string             `json:"share_id"`
+	EncryptedFilename string             `json:"encrypted_filename"`
+	EncryptedMimeType string             `json:"encrypted_mime_type"`
+	Salt              string             `json:"salt"`
+	Pbkdf2Iterations  int32              `json:"pbkdf2_iterations"`
+	TotalSize         int64              `json:"total_size"`
+	ChunkCount        int32              `json:"chunk_count"`
+	ChunkSize         int32              `json:"chunk_size"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	MaxDownloads      int32              `json:"max_downloads"`
+	DeletionTokenHash pgtype.Text        `json:"deletion_token_hash"`
+	UploaderIp        netip.Addr         `json:"uploader_ip"`
+}
+
+func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, error) {
+	row := q.db.QueryRow(ctx, createFile,
+		arg.ShareID,
+		arg.EncryptedFilename,
+		arg.EncryptedMimeType,
+		arg.Salt,
+		arg.Pbkdf2Iterations,
+		arg.TotalSize,
+		arg.ChunkCount,
+		arg.ChunkSize,
+		arg.ExpiresAt,
+		arg.MaxDownloads,
+		arg.DeletionTokenHash,
+		arg.UploaderIp,
+	)
 	var i File
 	err := row.Scan(
 		&i.ID,
 		&i.ShareID,
 		&i.EncryptedFilename,
 		&i.EncryptedMimeType,
+		&i.Salt,
+		&i.Pbkdf2Iterations,
 		&i.TotalSize,
 		&i.ChunkCount,
 		&i.ChunkSize,
 		&i.Status,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.LastDownloadedAt,
 		&i.MaxDownloads,
 		&i.DownloadCount,
+		&i.DeletionTokenHash,
+		&i.UploaderIp,
+	)
+	return i, err
+}
+
+const deleteExpiredFiles = `-- name: DeleteExpiredFiles :exec
+DELETE FROM files
+WHERE expires_at < now() OR (max_downloads <= download_count AND status = 'ready')
+`
+
+func (q *Queries) DeleteExpiredFiles(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredFiles)
+	return err
+}
+
+const getFileByID = `-- name: GetFileByID :one
+SELECT id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip FROM files
+WHERE id = $1
+`
+
+func (q *Queries) GetFileByID(ctx context.Context, id pgtype.UUID) (File, error) {
+	row := q.db.QueryRow(ctx, getFileByID, id)
+	var i File
+	err := row.Scan(
+		&i.ID,
+		&i.ShareID,
+		&i.EncryptedFilename,
+		&i.EncryptedMimeType,
+		&i.Salt,
+		&i.Pbkdf2Iterations,
+		&i.TotalSize,
+		&i.ChunkCount,
+		&i.ChunkSize,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
 		&i.LastDownloadedAt,
+		&i.MaxDownloads,
+		&i.DownloadCount,
+		&i.DeletionTokenHash,
+		&i.UploaderIp,
+	)
+	return i, err
+}
+
+const getFileByShareID = `-- name: GetFileByShareID :one
+SELECT id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip FROM files
+WHERE share_id = $1
+`
+
+func (q *Queries) GetFileByShareID(ctx context.Context, shareID string) (File, error) {
+	row := q.db.QueryRow(ctx, getFileByShareID, shareID)
+	var i File
+	err := row.Scan(
+		&i.ID,
+		&i.ShareID,
+		&i.EncryptedFilename,
+		&i.EncryptedMimeType,
+		&i.Salt,
+		&i.Pbkdf2Iterations,
+		&i.TotalSize,
+		&i.ChunkCount,
+		&i.ChunkSize,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.LastDownloadedAt,
+		&i.MaxDownloads,
+		&i.DownloadCount,
+		&i.DeletionTokenHash,
+		&i.UploaderIp,
+	)
+	return i, err
+}
+
+const incrementDownloadCount = `-- name: IncrementDownloadCount :one
+UPDATE files
+SET
+    download_count = download_count + 1,
+    last_downloaded_at = now()
+WHERE id = $1
+RETURNING id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
+`
+
+func (q *Queries) IncrementDownloadCount(ctx context.Context, id pgtype.UUID) (File, error) {
+	row := q.db.QueryRow(ctx, incrementDownloadCount, id)
+	var i File
+	err := row.Scan(
+		&i.ID,
+		&i.ShareID,
+		&i.EncryptedFilename,
+		&i.EncryptedMimeType,
+		&i.Salt,
+		&i.Pbkdf2Iterations,
+		&i.TotalSize,
+		&i.ChunkCount,
+		&i.ChunkSize,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.LastDownloadedAt,
+		&i.MaxDownloads,
+		&i.DownloadCount,
+		&i.DeletionTokenHash,
+		&i.UploaderIp,
+	)
+	return i, err
+}
+
+const updateFileStatus = `-- name: UpdateFileStatus :one
+UPDATE files
+SET status = $2
+WHERE id = $1
+RETURNING id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
+`
+
+func (q *Queries) UpdateFileStatus(ctx context.Context, iD pgtype.UUID, status string) (File, error) {
+	row := q.db.QueryRow(ctx, updateFileStatus, iD, status)
+	var i File
+	err := row.Scan(
+		&i.ID,
+		&i.ShareID,
+		&i.EncryptedFilename,
+		&i.EncryptedMimeType,
+		&i.Salt,
+		&i.Pbkdf2Iterations,
+		&i.TotalSize,
+		&i.ChunkCount,
+		&i.ChunkSize,
+		&i.Status,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.LastDownloadedAt,
+		&i.MaxDownloads,
+		&i.DownloadCount,
 		&i.DeletionTokenHash,
 		&i.UploaderIp,
 	)

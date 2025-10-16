@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/ilkin0/gzln/internal/api/routes"
+	"github.com/ilkin0/gzln/internal/database"
+	"github.com/ilkin0/gzln/internal/service"
 	"github.com/ilkin0/gzln/internal/storage"
 	"github.com/joho/godotenv"
 )
@@ -17,11 +20,23 @@ func main() {
 		log.Println("No .env file found or unable to load it")
 	}
 
+	ctx := context.Background()
+
+	// Initialize Database
+	db, err := database.NewDatabase(ctx)
+	if err != nil {
+		log.Fatalf("Failed ti initialize database: %v", err)
+	}
+	defer db.Pool.Close()
+
 	// Initialize MinIO client
 	minioClient, err := storage.NewMinIOClient()
 	if err != nil {
 		log.Fatalf("Failed to initialize MinIO: %v", err)
 	}
+
+	// Initialize FileService
+	fileService := service.NewFileService(db.Queries, minioClient.Client)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -29,7 +44,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// Mount routes
-	r.Mount("/api/files", routes.FileRoutes(minioClient.Client, minioClient.BucketName))
+	r.Mount("/api/files", routes.FileRoutes(fileService, minioClient.BucketName))
 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {

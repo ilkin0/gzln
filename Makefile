@@ -30,7 +30,16 @@ sqlc:
 
 # Development
 dev:
-	air
+	@echo "Starting development servers..."
+	@make -j2 dev-backend dev-frontend
+
+dev-backend:
+	@echo "Starting Go backend with Air..."
+	@air
+
+dev-frontend:
+	@echo "Starting Svelte frontend..."
+	@cd web && npm run dev
 
 air-init:
 	air init
@@ -57,4 +66,4 @@ fmt:
 tidy:
 	go mod tidy
 
-.PHONY: createdb dropdb goose-up goose-down goose-status goose-reset goose-create sqlc dev air-init build run test test-short vet fmt tidy
+.PHONY: createdb dropdb goose-up goose-down goose-status goose-reset goose-create sqlc dev dev-backend dev-frontend air-init build run test test-short vet fmt tidy

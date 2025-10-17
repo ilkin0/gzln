@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/ilkin0/gzln/internal/api/routes"
 	"github.com/ilkin0/gzln/internal/database"
+	custommiddleware "github.com/ilkin0/gzln/internal/middleware"
 	"github.com/ilkin0/gzln/internal/service"
 	"github.com/ilkin0/gzln/internal/storage"
 	"github.com/joho/godotenv"
@@ -40,6 +41,11 @@ func main() {
 
 	// Setup router
 	r := chi.NewRouter()
+
+	// CORS middleware
+	r.Use(custommiddleware.CORS)
+
+	// Standard middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 

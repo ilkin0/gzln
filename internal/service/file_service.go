@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"net/netip"
 	"time"
 
@@ -30,10 +32,13 @@ func (s *FileService) GetMinIOClient() *minio.Client {
 }
 
 func generateShareID() string {
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 12)
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	length := 12
+	b := make([]byte, length)
+
 	for i := range b {
-		b[i] = charset[uuid.New().ID()%uint32(len(charset))]
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[n.Int64()]
 	}
 	return string(b)
 }

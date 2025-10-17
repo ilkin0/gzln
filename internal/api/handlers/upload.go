@@ -82,60 +82,140 @@ func (h *FileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// Helper function to extract client IP from request
+func getClientIP(r *http.Request) string {
+	// Try X-Forwarded-For header first (for proxies/load balancers)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return xff
+	}
+	// Try X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	// Fall back to RemoteAddr
+	return r.RemoteAddr
+}
+
+// Helper function to generate a random share ID (12 characters)
+func generateShareID() string {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 12)
+	for i := range b {
+		b[i] = charset[uuid.New().ID()%uint32(len(charset))]
+	}
+	return string(b)
+}
+
 func (h *FileHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse HTTP request body into DTO
 	initRequest := new(types.InitUploadRequest)
 	if err := json.NewDecoder(r.Body).Decode(initRequest); err != nil {
-		http.Error(w, "Failed to read Request Body!", http.StatusBadRequest)
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
 	log.Printf("Init Request: %+v", initRequest)
-	if initRequest.FileSize >= 20<<20 {
-		http.Error(w, fmt.Sprintf("File size %d exceeds max size %d", initRequest.FileSize, 20<<20), http.StatusBadRequest)
+
+	// 2. Validate required fields
+	if initRequest.Salt == "" {
+		http.Error(w, "salt is required", http.StatusBadRequest)
+		return
+	}
+	if initRequest.EncryptedFilename == "" {
+		http.Error(w, "encrypted_filename is required", http.StatusBadRequest)
+		return
+	}
+	if initRequest.EncryptedMimeType == "" {
+		http.Error(w, "encrypted_mime_type is required", http.StatusBadRequest)
+		return
+	}
+	if initRequest.TotalSize <= 0 {
+		http.Error(w, "total_size must be positive", http.StatusBadRequest)
+		return
+	}
+	if initRequest.ChunkCount <= 0 {
+		http.Error(w, "chunk_count must be positive", http.StatusBadRequest)
+		return
+	}
+	if initRequest.ChunkSize <= 0 {
+		http.Error(w, "chunk_size must be positive", http.StatusBadRequest)
+		return
+	}
+	if initRequest.Pbkdf2Iterations <= 0 {
+		http.Error(w, "pbkdf2_iterations must be positive", http.StatusBadRequest)
+		return
+	}
+
+	// Validate business rules
+	if initRequest.TotalSize > 5<<30 {
+		http.Error(w, fmt.Sprintf("File size %d exceeds max size of 5GB", initRequest.TotalSize), http.StatusBadRequest)
 		return
 	}
 
 	ctx := context.Background()
 
-	fileID := uuid.New().String()
-	chunkCount := initRequest.FileSize / 5
+	// 3. Generate IDs
+	fileID := uuid.New()
+	shareID := generateShareID()
+	uploadToken := uuid.New().String()
 
-	params := sqlc.CreateFileParams{
-		ShareID:           "12_char_shar",
-		EncryptedFilename: "encrypted-file",
-		EncryptedMimeType: initRequest.MimeType,
-		Salt:              "temp-salt",
-		Pbkdf2Iterations:  100000,
-		TotalSize:         initRequest.FileSize,
-		ChunkCount:        int32(chunkCount),
-		ChunkSize:         1024 * 1024,
-		ExpiresAt: pgtype.Timestamptz{
-			Time:  time.Now().Add(24 * time.Hour),
-			Valid: true,
-		},
-		MaxDownloads: 10,
-		DeletionTokenHash: pgtype.Text{
-			String: "temp-token",
-			Valid:  true,
-		},
-		UploaderIp: netip.MustParseAddr("127.0.0.1"),
+	// 4. Set defaults for optional fields
+	maxDownloads := initRequest.MaxDownloads
+	if maxDownloads == 0 {
+		maxDownloads = 1
+	}
+	expiresInHours := initRequest.ExpiresInHours
+	if expiresInHours == 0 {
+		expiresInHours = 24
 	}
 
-	file, err := h.fileService.CreateFileRecord(ctx, params)
+	expiresAt := time.Now().Add(time.Duration(expiresInHours) * time.Hour)
+
+	clientIPStr := getClientIP(r)
+	clientIP, err := netip.ParseAddr(clientIPStr)
+	if err != nil {
+
+		clientIP = netip.MustParseAddr("127.0.0.1")
+		log.Printf("Failed to parse client IP %s: %v, using 127.0.0.1", clientIPStr, err)
+	}
+
+	params := sqlc.CreateFileParams{
+		ShareID:           shareID,
+		EncryptedFilename: initRequest.EncryptedFilename,
+		EncryptedMimeType: initRequest.EncryptedMimeType,
+		Salt:              initRequest.Salt,
+		Pbkdf2Iterations:  initRequest.Pbkdf2Iterations,
+		TotalSize:         initRequest.TotalSize,
+		ChunkCount:        initRequest.ChunkCount,
+		ChunkSize:         initRequest.ChunkSize,
+		ExpiresAt: pgtype.Timestamptz{
+			Time:  expiresAt,
+			Valid: true,
+		},
+		MaxDownloads: maxDownloads,
+		DeletionTokenHash: pgtype.Text{
+			String: uploadToken, // TODO: Hash this token before storing
+			Valid:  true,
+		},
+		UploaderIp: clientIP,
+	}
+
+	_, err = h.fileService.CreateFileRecord(ctx, params)
 	if err != nil {
 		log.Printf("Failed to create file record: %v", err)
 		http.Error(w, "Failed to create file record", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("Created file record: %+v", file)
+	log.Printf("Created file record: ID=%s, ShareID=%s", fileID.String(), shareID)
 
 	response := types.InitUploadResponse{
-		FileID:      fileID,
-		ChunkCount:  chunkCount,
-		UploadToken: uuid.New().String(),
+		FileID:      fileID.String(),
+		ShareID:     shareID,
+		UploadToken: uploadToken,
+		ExpiresAt:   expiresAt.Format(time.RFC3339),
 	}
 
-	log.Printf("Response %+v", response)
+	log.Printf("Response: %+v", response)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)

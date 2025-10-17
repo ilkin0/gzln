@@ -6,10 +6,17 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
-	GetFiles(ctx context.Context) (File, error)
+	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
+	DeleteExpiredFiles(ctx context.Context) error
+	GetFileByID(ctx context.Context, id pgtype.UUID) (File, error)
+	GetFileByShareID(ctx context.Context, shareID string) (File, error)
+	IncrementDownloadCount(ctx context.Context, id pgtype.UUID) (File, error)
+	UpdateFileStatus(ctx context.Context, iD pgtype.UUID, status string) (File, error)
 }
 
 var _ Querier = (*Queries)(nil)

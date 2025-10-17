@@ -11,17 +11,18 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ilkin0/gzln/internal/api/types"
+	"github.com/ilkin0/gzln/internal/service"
 	"github.com/minio/minio-go/v7"
 )
 
 type FileHandler struct {
-	minioClient *minio.Client
+	fileService *service.FileService
 	bucketName  string
 }
 
-func NewFileHandler(client *minio.Client, bucketName string) *FileHandler {
+func NewFileHandler(fileService *service.FileService, bucketName string) *FileHandler {
 	return &FileHandler{
-		minioClient: client,
+		fileService: fileService,
 		bucketName:  bucketName,
 	}
 }
@@ -45,7 +46,7 @@ func (h *FileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	objectname := fmt.Sprintf("%s%s", fileID, ext)
 
 	ctx := context.Background()
-	info, err := h.minioClient.PutObject(
+	info, err := h.fileService.GetMinIOClient().PutObject(
 		ctx,
 		h.bucketName,
 		objectname,
@@ -72,8 +73,43 @@ func (h *FileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		URL:         fmt.Sprintf("/api/files/%s", fileID+ext),
 	}
 
-	log.Println("Response %w", response)
+	log.Printf("Response %+v", response)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
+}
+
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return xff
+	}
+
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+
+	return r.RemoteAddr
+}
+
+func (h *FileHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
+	var req types.InitUploadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
+		return
+	}
+
+	clientIP := getClientIP(r)
+
+	ctx := context.Background()
+	response, err := h.fileService.InitFileUpload(ctx, req, clientIP)
+	if err != nil {
+		log.Printf("Failed to init upload: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Upload initialized: ShareID=%s, FileID=%s", response.ShareID, response.FileID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }

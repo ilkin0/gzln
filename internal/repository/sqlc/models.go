@@ -15,7 +15,7 @@ type Chunk struct {
 	FileID        pgtype.UUID        `json:"file_id"`
 	ChunkIndex    int32              `json:"chunk_index"`
 	StoragePath   string             `json:"storage_path"`
-	EncrpytedSize int32              `json:"encrpyted_size"`
+	EncryptedSize int64              `json:"encrypted_size"`
 	ChunkHash     string             `json:"chunk_hash"`
 	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
 }
@@ -25,15 +25,17 @@ type File struct {
 	ShareID           string             `json:"share_id"`
 	EncryptedFilename string             `json:"encrypted_filename"`
 	EncryptedMimeType string             `json:"encrypted_mime_type"`
+	Salt              string             `json:"salt"`
+	Pbkdf2Iterations  int32              `json:"pbkdf2_iterations"`
 	TotalSize         int64              `json:"total_size"`
 	ChunkCount        int32              `json:"chunk_count"`
 	ChunkSize         int32              `json:"chunk_size"`
 	Status            string             `json:"status"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
-	MaxDownloads      pgtype.Int4        `json:"max_downloads"`
-	DownloadCount     int32              `json:"download_count"`
 	LastDownloadedAt  pgtype.Timestamptz `json:"last_downloaded_at"`
+	MaxDownloads      int32              `json:"max_downloads"`
+	DownloadCount     int32              `json:"download_count"`
 	DeletionTokenHash pgtype.Text        `json:"deletion_token_hash"`
-	UploaderIp        *netip.Addr        `json:"uploader_ip"`
+	UploaderIp        netip.Addr         `json:"uploader_ip"`
 }

@@ -2,6 +2,13 @@
   import { filesApi } from "$lib/api/files";
   import { MAX_FILE_SIZE, CHUNK_SIZE } from "$lib/config";
   import type { InitUploadRequest } from "$lib/types/api";
+  import {
+    deriveKey,
+    encryptString,
+    generateSalt,
+    PBKDF2_ITERATIONS,
+  } from "../../crypto/encrypt";
+  import { calculateChunks } from "../../crypto/utils";
 
   let files: FileList | null = $state(null);
   let uploading = $state(false);
@@ -16,7 +23,6 @@
 
   const TEMP_PASSWORD = "temp-password-placeholder";
 
-  // Auto-upload when file is selected
   $effect(() => {
     if (files && files.length > 0 && !uploading && !uploadResult) {
       handleUpload();
@@ -41,14 +47,14 @@
     uploadResult = null;
 
     try {
-      const salt = "generate-random-salt";
+      const salt = generateSalt();
 
-      const key = "derive_Key"; // TODO
+      const key = await deriveKey(TEMP_PASSWORD, salt);
 
-      const encryptedFilename = "encrypted_string";
-      const encryptedMimeType = "encrypt_string";
+      const encryptedFilename = await encryptString(file.name, key);
+      const encryptedMimeType = await encryptString(file.type, key);
 
-      const chunkCount = 100;
+      const chunkCount = calculateChunks(file.size, CHUNK_SIZE);
 
       const request: InitUploadRequest = {
         salt,
@@ -57,11 +63,11 @@
         total_size: file.size,
         chunk_count: chunkCount,
         chunk_size: CHUNK_SIZE,
-        pbkdf2_iterations: 1000, // TODO
+        pbkdf2_iterations: PBKDF2_ITERATIONS,
       };
 
       const response = await filesApi.initUpload(request);
-
+      console.log("Init Response: ", response);
       // TODO: Upload actual file chunks
 
       uploadResult = {

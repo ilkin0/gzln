@@ -46,7 +46,6 @@ class ApiClient {
   }
 
   post<T>(endpoint: string, data: unknown): Promise<T> {
-    console.log("POST Data: ", JSON.stringify(data));
     return this.request<T>(endpoint, {
       method: "POST",
       body: JSON.stringify(data),

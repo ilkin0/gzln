@@ -127,6 +127,7 @@
         fileId: initResponse.file_id,
         uploadToken: initResponse.upload_token,
         chunkSize: CHUNK_SIZE,
+        encryptionKey: key,
         onProgress: (progress) => {
           uploadProgress = progress;
         },

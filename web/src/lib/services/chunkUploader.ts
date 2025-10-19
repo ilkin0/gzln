@@ -4,6 +4,7 @@ import {
   getFileChunk,
   calculateChunkHash,
 } from "../../crypto/utils";
+import { encryptChunk } from "../../crypto/encrypt";
 
 const CONCURRENT_UPLOADS = 5;
 
@@ -21,6 +22,7 @@ export interface ChunkUploadOptions {
   fileId: string;
   uploadToken: string;
   chunkSize: number;
+  encryptionKey: CryptoKey;
   onProgress?: (progress: UploadProgress) => void;
   onError?: (error: Error, chunkIndex: number) => void;
   concurrency?: number;
@@ -34,6 +36,7 @@ export async function uploadFileInChunks(
     fileId,
     uploadToken,
     chunkSize,
+    encryptionKey,
     onProgress,
     onError,
     concurrency = CONCURRENT_UPLOADS,
@@ -50,12 +53,21 @@ export async function uploadFileInChunks(
   async function uploadChunk(chunkIndex: number): Promise<void> {
     try {
       const chunk = await getFileChunk(file, chunkIndex, chunkSize);
-      const hash = await calculateChunkHash(chunk);
+      const plainChunkSize = chunk.size;
 
-      await filesApi.uploadChunk(fileId, chunkIndex, chunk, hash, uploadToken);
+      const encryptedChunk = await encryptChunk(chunk, encryptionKey);
+      const hash = await calculateChunkHash(encryptedChunk);
+
+      await filesApi.uploadChunk(
+        fileId,
+        chunkIndex,
+        encryptedChunk,
+        hash,
+        uploadToken,
+      );
 
       uploadedChunks++;
-      uploadedBytes += chunk.size;
+      uploadedBytes += plainChunkSize;
 
       if (onProgress) {
         const elapsedSeconds = (Date.now() - startTime) / 1000;

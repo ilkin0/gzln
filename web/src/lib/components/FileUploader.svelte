@@ -9,10 +9,13 @@
     PBKDF2_ITERATIONS,
   } from "../../crypto/encrypt";
   import { calculateChunks } from "../../crypto/utils";
+  import { uploadFileInChunks } from "$lib/services/chunkUploader";
+  import type { UploadProgress as UploadProgressType } from "$lib/services/chunkUploader";
+  import UploadProgress from "./UploadProgress.svelte";
 
   let files: FileList | null = $state(null);
   let uploading = $state(false);
-  let uploadResult: {
+  let initUploadResult: {
     share_id: string;
     file_id: string;
     expires_at: string;
@@ -20,11 +23,60 @@
   let error = $state("");
   let copied = $state(false);
   let isDragging = $state(false);
+  let uploadProgress = $state<UploadProgressType | null>(null);
 
   const TEMP_PASSWORD = "temp-password-placeholder";
 
+  function getUserFriendlyError(err: unknown): string {
+    if (!(err instanceof Error)) {
+      return "Upload failed. Please try again.";
+    }
+
+    const message = err.message.toLowerCase();
+
+    if (message.includes("failed to fetch") || message.includes("network")) {
+      return "Network error. Please check your internet connection and try again.";
+    }
+
+    if (message.includes("404")) {
+      return "Upload service is temporarily unavailable. Please try again later.";
+    }
+
+    if (
+      message.includes("500") ||
+      message.includes("502") ||
+      message.includes("503")
+    ) {
+      return "Server error occurred. Please try again in a few moments.";
+    }
+
+    if (message.includes("401") || message.includes("403")) {
+      return "Upload session expired. Please try again.";
+    }
+
+    if (message.includes("413") || message.includes("too large")) {
+      return "File is too large. Maximum file size is 5 GB.";
+    }
+
+    if (message.includes("timeout") || message.includes("timed out")) {
+      return "Upload is taking too long. Please check your connection and try again.";
+    }
+
+    if (message.includes("chunk upload failed")) {
+      return "Upload was interrupted. Please try again.";
+    }
+
+    return "Upload failed. Please try again.";
+  }
+
   $effect(() => {
-    if (files && files.length > 0 && !uploading && !uploadResult) {
+    if (
+      files &&
+      files.length > 0 &&
+      !uploading &&
+      !initUploadResult &&
+      !error
+    ) {
       handleUpload();
     }
   });
@@ -44,7 +96,8 @@
 
     uploading = true;
     error = "";
-    uploadResult = null;
+    initUploadResult = null;
+    uploadProgress = null;
 
     try {
       const salt = generateSalt();
@@ -66,31 +119,47 @@
         pbkdf2_iterations: PBKDF2_ITERATIONS,
       };
 
-      const response = await filesApi.initUpload(request);
-      console.log("Init Response: ", response);
-      // TODO: Upload actual file chunks
+      const initResponse = await filesApi.initUpload(request);
+      //  console.log("Init Response: ", initResponse);
 
-      uploadResult = {
-        share_id: response.share_id,
-        file_id: response.file_id,
-        expires_at: response.expires_at,
+      await uploadFileInChunks({
+        file,
+        fileId: initResponse.file_id,
+        uploadToken: initResponse.upload_token,
+        chunkSize: CHUNK_SIZE,
+        onProgress: (progress) => {
+          uploadProgress = progress;
+        },
+        onError: (err, chunkIndex) => {
+          console.error(`Failed to upload chunk ${chunkIndex}:`, err);
+        },
+        concurrency: 5,
+      });
+
+      initUploadResult = {
+        share_id: initResponse.share_id,
+        file_id: initResponse.file_id,
+        expires_at: initResponse.expires_at,
       };
     } catch (err) {
-      error = err instanceof Error ? err.message : "Upload failed";
+      console.error("Upload error:", err);
+      error = getUserFriendlyError(err);
     } finally {
       uploading = false;
+      uploadProgress = null;
     }
   }
 
   function resetForm() {
     files = null;
-    uploadResult = null;
+    initUploadResult = null;
     error = "";
     copied = false;
+    uploadProgress = null;
   }
 
   function copyToClipboard() {
-    const url = `${window.location.origin}/${uploadResult?.share_id}`;
+    const url = `${window.location.origin}/${initUploadResult?.share_id}`;
     navigator.clipboard.writeText(url);
     copied = true;
     setTimeout(() => {
@@ -133,7 +202,7 @@
 </script>
 
 <div class="bg-white rounded-2xl shadow-xl p-8">
-  {#if uploadResult}
+  {#if initUploadResult}
     <!-- Success State -->
     <div class="text-center">
       <div
@@ -185,7 +254,7 @@
             <code
               class="flex-1 text-sm md:text-base font-mono text-blue-700 break-all"
             >
-              {window.location.origin}/{uploadResult.share_id}
+              {window.location.origin}/{initUploadResult.share_id}
             </code>
           </div>
           <button
@@ -247,7 +316,7 @@
           <div>
             <p class="text-sm font-medium text-amber-900">Link expires on</p>
             <p class="text-sm text-amber-700 font-semibold">
-              {formatDate(uploadResult.expires_at)}
+              {formatDate(initUploadResult.expires_at)}
             </p>
           </div>
         </div>
@@ -312,30 +381,71 @@
         <div
           class="border-2 border-blue-300 bg-blue-50 rounded-lg p-12 text-center"
         >
-          <div class="flex justify-center mb-4">
-            <div
-              class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"
-            ></div>
-          </div>
-          <p class="text-lg font-medium text-gray-900 mb-1">Uploading...</p>
-          {#if files && files[0]}
-            <p class="text-sm text-gray-600">{files[0].name}</p>
-            <p class="text-xs text-gray-500 mt-1">
-              {(files[0].size / 1024 / 1024).toFixed(2)} MB
+          {#if uploadProgress}
+            <UploadProgress progress={uploadProgress} />
+          {:else}
+            <div class="flex justify-center mb-4">
+              <div
+                class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"
+              ></div>
+            </div>
+            <p class="text-lg font-medium text-gray-900 mb-1">
+              Preparing upload...
             </p>
+            {#if files && files[0]}
+              <p class="text-sm text-gray-600">{files[0].name}</p>
+              <p class="text-xs text-gray-500 mt-1">
+                {(files[0].size / 1024 / 1024).toFixed(2)} MB
+              </p>
+            {/if}
           {/if}
         </div>
       {/if}
 
       {#if error}
-        <div class="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p class="text-red-600 text-sm">{error}</p>
-          <button
-            onclick={resetForm}
-            class="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Try again
-          </button>
+        <div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-6">
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0">
+              <svg
+                class="w-6 h-6 text-red-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-sm font-semibold text-red-900 mb-1">
+                Upload Failed
+              </h3>
+              <p class="text-sm text-red-700">{error}</p>
+              <button
+                onclick={resetForm}
+                class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                Try Again
+              </button>
+            </div>
+          </div>
         </div>
       {/if}
     </div>

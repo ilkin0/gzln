@@ -176,3 +176,8 @@ tmp/
 
 # Database
 *.db
+
+# Build artifacts
+/server
+/bin/
+*.out

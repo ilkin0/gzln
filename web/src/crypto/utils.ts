@@ -25,7 +25,7 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-export function calculateChunks(fileSize: number, chunkSize: number) {
+export function calculateChunks(fileSize: number, chunkSize: number): number {
   return Math.ceil(fileSize / chunkSize);
 }
 
@@ -37,4 +37,11 @@ export async function getFileChunk(
   const start = index * chunkSize;
   const end = Math.min(start + chunkSize, file.size);
   return file.slice(start, end);
+}
+
+export async function calculateChunkHash(chunk: Blob): Promise<string> {
+  const buffer = await chunk.arrayBuffer();
+  const hashedData = await crypto.subtle.digest("SHA-256", buffer);
+
+  return arrayBufferToBase64(hashedData);
 }

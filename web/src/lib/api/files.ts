@@ -14,6 +14,28 @@ export const filesApi = {
     return apiClient.get<FileMetadata>(`/api/files/${shareId}`);
   },
 
-  // TODO: chunk upload
-  // async uploadChunk(shareId: string, chunkIndex: number, data: Blob, token: string) { ... }
+  async uploadChunk(
+    fileId: string,
+    chunkIndex: number,
+    chunk: Blob,
+    hash: string,
+    uploadToken: string,
+  ): Promise<void> {
+    const formData = new FormData();
+    formData.append("chunk", chunk);
+    formData.append("chunk_index", chunkIndex.toString());
+    formData.append("hash", hash);
+
+    const response = await fetch(`/api/files/${fileId}/chunks`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${uploadToken}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Chunk upload failed: ${response.status} ${response.statusText}`);
+    }
+  },
 };

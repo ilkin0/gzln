@@ -119,9 +119,14 @@ export async function uploadFileInChunks(
 
         activeUploads.add(uploadPromise);
 
-        uploadPromise.finally(() => {
-          activeUploads.delete(uploadPromise);
-        });
+        uploadPromise
+          .catch(() => {
+            // Errors are already handled in uploadChunk's catch block
+            // This just prevents unhandled rejection warnings
+          })
+          .finally(() => {
+            activeUploads.delete(uploadPromise);
+          });
       }
 
       if (activeUploads.size > 0) {

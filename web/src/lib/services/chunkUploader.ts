@@ -47,10 +47,25 @@ export async function uploadFileInChunks(
   let uploadedBytes = 0;
   const startTime = Date.now();
 
+  if (onProgress) {
+    onProgress({
+      uploadedChunks: 0,
+      totalChunks,
+      uploadedBytes: 0,
+      totalBytes: file.size,
+      currentSpeed: 0,
+      estimatedTimeRemaining: 0,
+    });
+  }
+
   const chunkIndices = Array.from({ length: totalChunks }, (_, i) => i);
   const activeUploads = new Set<Promise<void>>();
+  let uploadAborted = false;
 
   async function uploadChunk(chunkIndex: number): Promise<void> {
+    if (uploadAborted) {
+      throw new Error("Upload aborted due to previous error");
+    }
     try {
       const chunk = await getFileChunk(file, chunkIndex, chunkSize);
       const plainChunkSize = chunk.size;
@@ -85,6 +100,7 @@ export async function uploadFileInChunks(
         });
       }
     } catch (error) {
+      uploadAborted = true;
       if (onError) {
         onError(
           error instanceof Error ? error : new Error("Upload Failed"),
@@ -114,6 +130,8 @@ export async function uploadFileInChunks(
     }
   } catch (error) {
     chunkIndices.length = 0;
+    uploadAborted = true;
+
     throw error;
   }
 }

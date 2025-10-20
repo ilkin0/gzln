@@ -120,7 +120,6 @@
       };
 
       const initResponse = await filesApi.initUpload(request);
-      //  console.log("Init Response: ", initResponse);
 
       await uploadFileInChunks({
         file,
@@ -145,6 +144,7 @@
     } catch (err) {
       console.error("Upload error:", err);
       error = getUserFriendlyError(err);
+      files = null;
     } finally {
       uploading = false;
       uploadProgress = null;

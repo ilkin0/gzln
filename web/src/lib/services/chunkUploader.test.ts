@@ -24,9 +24,6 @@ describe("ChunkUploader Service", () => {
 
       // Create a 25-byte file (will create 3 chunks of 10 bytes)
       const data = new Uint8Array(25);
-      for (let i = 0; i < 25; i++) {
-        data[i] = i;
-      }
       const file = new File([data], "test.bin");
 
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
@@ -113,7 +110,7 @@ describe("ChunkUploader Service", () => {
       expect(uploadedChunk.size).toBe(38);
     });
 
-    it("should call onProgress callback with correct progress", async () => {
+    it("should call onProgress callback with progress updates", async () => {
       const salt = generateSalt();
       const key = await deriveKey(TEST_PASSWORD, salt);
 
@@ -123,10 +120,7 @@ describe("ChunkUploader Service", () => {
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
       mockUploadChunk.mockResolvedValue(undefined);
 
-      const progressUpdates: number[] = [];
-      const onProgress = vi.fn((progress) => {
-        progressUpdates.push(progress.uploadedChunks);
-      });
+      const onProgress = vi.fn();
 
       await uploadFileInChunks({
         file,
@@ -137,8 +131,8 @@ describe("ChunkUploader Service", () => {
         onProgress,
       });
 
-      expect(onProgress).toHaveBeenCalled();
-      expect(progressUpdates.length).toBeGreaterThan(0);
+      // Should be called multiple times (initial + 3 chunks)
+      expect(onProgress.mock.calls.length).toBeGreaterThan(3);
 
       const lastProgress =
         onProgress.mock.calls[onProgress.mock.calls.length - 1][0];
@@ -230,6 +224,116 @@ describe("ChunkUploader Service", () => {
       });
 
       expect(maxConcurrentCalls).toBeLessThanOrEqual(3);
+    });
+
+    it("should call onProgress immediately with initial state", async () => {
+      const salt = generateSalt();
+      const key = await deriveKey(TEST_PASSWORD, salt);
+
+      const data = new Uint8Array(30);
+      const file = new File([data], "test.bin");
+
+      const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
+      mockUploadChunk.mockResolvedValue(undefined);
+
+      const onProgress = vi.fn();
+
+      await uploadFileInChunks({
+        file,
+        fileId: "test-file-id",
+        uploadToken: "test-token",
+        chunkSize: 10,
+        encryptionKey: key,
+        onProgress,
+      });
+
+      const firstCall = onProgress.mock.calls[0][0];
+      expect(firstCall.uploadedChunks).toBe(0);
+      expect(firstCall.totalChunks).toBe(3);
+      expect(firstCall.uploadedBytes).toBe(0);
+      expect(firstCall.totalBytes).toBe(30);
+      expect(firstCall.currentSpeed).toBe(0);
+      expect(firstCall.estimatedTimeRemaining).toBe(0);
+    });
+
+    it("should fail fast when first chunk upload fails", async () => {
+      const salt = generateSalt();
+      const key = await deriveKey(TEST_PASSWORD, salt);
+
+      const data = new Uint8Array(100); // 10 chunks
+      const file = new File([data], "test.bin");
+
+      const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
+      mockUploadChunk.mockImplementation(() =>
+        Promise.reject(new Error("Network error")),
+      );
+
+      await expect(
+        uploadFileInChunks({
+          file,
+          fileId: "test-file-id",
+          uploadToken: "test-token",
+          chunkSize: 10,
+          encryptionKey: key,
+        }),
+      ).rejects.toThrow("Network error");
+
+      expect(mockUploadChunk.mock.calls.length).toBeLessThan(10);
+    });
+
+    it("should call onError callback when chunk upload fails", async () => {
+      const salt = generateSalt();
+      const key = await deriveKey(TEST_PASSWORD, salt);
+
+      const data = new Uint8Array(30);
+      const file = new File([data], "test.bin");
+
+      const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
+      const uploadError = new Error("Chunk upload failed");
+      mockUploadChunk.mockImplementation(() => Promise.reject(uploadError));
+
+      const onError = vi.fn();
+
+      await expect(
+        uploadFileInChunks({
+          file,
+          fileId: "test-file-id",
+          uploadToken: "test-token",
+          chunkSize: 10,
+          encryptionKey: key,
+          onError,
+        }),
+      ).rejects.toThrow("Chunk upload failed");
+
+      expect(onError).toHaveBeenCalledWith(uploadError, expect.any(Number));
+    });
+
+    it("should not start new chunks after first error", async () => {
+      const salt = generateSalt();
+      const key = await deriveKey(TEST_PASSWORD, salt);
+
+      const data = new Uint8Array(100); // 10 chunks with concurrency 2
+      const file = new File([data], "test.bin");
+
+      let callCount = 0;
+      const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
+      mockUploadChunk.mockImplementation(() => {
+        callCount++;
+        return Promise.reject(new Error("Server error"));
+      });
+
+      await expect(
+        uploadFileInChunks({
+          file,
+          fileId: "test-file-id",
+          uploadToken: "test-token",
+          chunkSize: 10,
+          encryptionKey: key,
+          concurrency: 2,
+        }),
+      ).rejects.toThrow("Server error");
+
+      expect(callCount).toBeLessThan(10);
     });
   });
 });

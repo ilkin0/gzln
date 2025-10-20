@@ -26,16 +26,25 @@ export const filesApi = {
     formData.append("chunk_index", chunkIndex.toString());
     formData.append("hash", hash);
 
-    const response = await fetch(`/api/files/${fileId}/chunks`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${uploadToken}`,
-      },
-      body: formData,
-    });
+    try {
+      const response = await fetch(`/api/files/${fileId}/chunks`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${uploadToken}`,
+        },
+        body: formData,
+      });
 
-    if (!response.ok) {
-      throw new Error(`Chunk upload failed: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(
+          `Chunk upload failed: ${response.status} ${response.statusText}`,
+        );
+      }
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error("Network error - please check your connection");
+      }
+      throw error;
     }
   },
 };

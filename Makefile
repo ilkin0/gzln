@@ -57,6 +57,21 @@ test:
 test-short:
 	go test -short -v ./...
 
+# Frontend commands
+test-frontend:
+	@echo "Running frontend tests..."
+	@cd web && npm test
+
+test-frontend-watch:
+	@echo "Running frontend tests in watch mode..."
+	@cd web && npm run test:watch
+
+# Run all tests
+test-all:
+	@echo "Running all tests..."
+	@make test
+	@make test-frontend
+
 vet:
 	go vet ./...
 
@@ -66,4 +81,4 @@ fmt:
 tidy:
 	go mod tidy
 
-.PHONY: createdb dropdb goose-up goose-down goose-status goose-reset goose-create sqlc dev dev-backend dev-frontend air-init build run test test-short vet fmt tidy
+.PHONY: createdb dropdb goose-up goose-down goose-status goose-reset goose-create sqlc dev dev-backend dev-frontend air-init build run test test-short test-frontend test-frontend-watch test-all vet fmt tidy

@@ -26,7 +26,7 @@ func main() {
 	// Initialize Database
 	db, err := database.NewDatabase(ctx)
 	if err != nil {
-		log.Fatalf("Failed ti initialize database: %v", err)
+		log.Fatalf("Failedt initialize database: %v", err)
 	}
 	defer db.Pool.Close()
 
@@ -38,6 +38,7 @@ func main() {
 
 	// Initialize FileService
 	fileService := service.NewFileService(db.Queries, minioClient.Client)
+	chunkService := service.NewChunkService(db.Queries, minioClient.Client)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -50,7 +51,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// Mount routes
-	r.Mount("/api/files", routes.FileRoutes(fileService, minioClient.BucketName))
+	r.Mount("/api/v1/files", routes.FileRoutes(fileService, chunkService, minioClient.BucketName))
 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {

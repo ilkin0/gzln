@@ -3,7 +3,7 @@
   import { MAX_FILE_SIZE, CHUNK_SIZE } from "$lib/config";
   import type { InitUploadRequest } from "$lib/types/api";
   import {
-    deriveKey,
+    generateSecureKey,
     encryptString,
     generateSalt,
     PBKDF2_ITERATIONS,
@@ -24,8 +24,6 @@
   let copied = $state(false);
   let isDragging = $state(false);
   let uploadProgress = $state<UploadProgressType | null>(null);
-
-  const TEMP_PASSWORD = "temp-password-placeholder";
 
   function getUserFriendlyError(err: unknown): string {
     if (!(err instanceof Error)) {
@@ -102,8 +100,7 @@
     try {
       const salt = generateSalt();
 
-      const key = await deriveKey(TEMP_PASSWORD, salt);
-
+      const key = await generateSecureKey()
       const encryptedFilename = await encryptString(file.name, key);
       const encryptedMimeType = await encryptString(file.type, key);
 

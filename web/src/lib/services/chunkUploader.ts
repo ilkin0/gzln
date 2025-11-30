@@ -72,7 +72,7 @@ export async function uploadFileInChunks(
 
       const encryptedChunk = await encryptChunk(chunk, encryptionKey);
       const hash = await calculateChunkHash(encryptedChunk);
-
+      
       await filesApi.uploadChunk(
         fileId,
         chunkIndex,

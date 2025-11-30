@@ -43,5 +43,6 @@ export async function calculateChunkHash(chunk: Blob): Promise<string> {
   const buffer = await chunk.arrayBuffer();
   const hashedData = await crypto.subtle.digest("SHA-256", buffer);
 
-  return arrayBufferToBase64(hashedData);
+  const uint8Array = new Uint8Array(hashedData);
+  return uint8Array.toHex();
 }

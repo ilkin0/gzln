@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ChunkExistsByFileIdAndIndex(ctx context.Context, fileID pgtype.UUID, chunkIndex int32) (bool, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
 	DeleteExpiredFiles(ctx context.Context) error
 	GetFileByID(ctx context.Context, id pgtype.UUID) (File, error)

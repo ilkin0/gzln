@@ -29,3 +29,5 @@ type UploadResponse struct {
 	UploadedAt  time.Time `json:"uploaded_at"`
 	URL         string    `json:"url"`
 }
+
+type ChunkUploadRequest struct{}

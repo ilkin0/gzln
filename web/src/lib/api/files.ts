@@ -7,11 +7,11 @@ import type {
 
 export const filesApi = {
   async initUpload(data: InitUploadRequest): Promise<InitUploadResponse> {
-    return apiClient.post<InitUploadResponse>("/api/files/upload/init", data);
+    return apiClient.post<InitUploadResponse>("/api/v1/files/upload/init", data);
   },
 
   async getFileMetadata(shareId: string): Promise<FileMetadata> {
-    return apiClient.get<FileMetadata>(`/api/files/${shareId}`);
+    return apiClient.get<FileMetadata>(`/api/v1/files/${shareId}`);
   },
 
   async uploadChunk(
@@ -27,7 +27,7 @@ export const filesApi = {
     formData.append("hash", hash);
 
     try {
-      const response = await fetch(`/api/files/${fileId}/chunks`, {
+      const response = await fetch(`/api/v1/files/${fileId}/chunks`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${uploadToken}`,

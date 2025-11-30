@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -49,4 +50,15 @@ func NewMinIOClient() (*MinIOClient, error) {
 		Client:     client,
 		BucketName: bucketName,
 	}, nil
+}
+
+func (m MinIOClient) UploadFile(ctx context.Context, file io.Reader, fileID string, chunkIndex string, fileSize int64) (minio.UploadInfo, error) {
+	uniqueFileName := fmt.Sprintf("%s::%s", fileID, chunkIndex)
+
+	uploadInfo, err := m.Client.PutObject(ctx, m.BucketName, uniqueFileName, file, fileSize, minio.PutObjectOptions{ContentType: "application/octet-stream"})
+	if err != nil {
+		return minio.UploadInfo{}, fmt.Errorf("Failed to upload chunk to MinIO", err)
+	}
+
+	return uploadInfo, nil
 }

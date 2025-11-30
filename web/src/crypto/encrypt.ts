@@ -7,11 +7,14 @@ import {
 const PBKDF2_ITERATIONS = 100_000;
 const ENCRYPTION_ALGORITHM = "AES-GCM";
 
-export async function deriveKey(
-  password: string,
-  salt: string,
+export async function generateSecureKey(
+  //password: string,
+  //salt: string,
 ): Promise<CryptoKey> {
   const encoder = new TextEncoder();
+  const password = crypto.getRandomValues(new Uint8Array(16))
+  const salt = generateSalt()
+
   const passwordBuffer = encoder.encode(password);
   const saltBuffer = base64ToArrayBuffer(salt);
 

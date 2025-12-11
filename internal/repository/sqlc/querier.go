@@ -11,13 +11,15 @@ import (
 )
 
 type Querier interface {
-	ChunkExistsByFileIdAndIndex(ctx context.Context, fileID pgtype.UUID, chunkIndex int32) (bool, error)
+	ChunkExistsByFileIdAndIndex(ctx context.Context, arg ChunkExistsByFileIdAndIndexParams) (bool, error)
+	CreateChunk(ctx context.Context, arg CreateChunkParams) (int64, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
 	DeleteExpiredFiles(ctx context.Context) error
+	FileExistsByIdAndStatus(ctx context.Context, arg FileExistsByIdAndStatusParams) (bool, error)
 	GetFileByID(ctx context.Context, id pgtype.UUID) (File, error)
 	GetFileByShareID(ctx context.Context, shareID string) (File, error)
 	IncrementDownloadCount(ctx context.Context, id pgtype.UUID) (File, error)
-	UpdateFileStatus(ctx context.Context, iD pgtype.UUID, status string) (File, error)
+	UpdateFileStatus(ctx context.Context, arg UpdateFileStatusParams) (File, error)
 }
 
 var _ Querier = (*Queries)(nil)

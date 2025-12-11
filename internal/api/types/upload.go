@@ -1,6 +1,10 @@
 package types
 
-import "time"
+import (
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
 
 type InitUploadRequest struct {
 	Salt              string `json:"salt"`
@@ -30,4 +34,17 @@ type UploadResponse struct {
 	URL         string    `json:"url"`
 }
 
-type ChunkUploadRequest struct{}
+type ChunkUploadRequest struct {
+	FileID       pgtype.UUID
+	ChunkIndex   int64
+	ChunkData    []byte
+	ExpectedHash string
+	ContentType  string
+	Filename     string
+}
+
+type ChunkUploadResponse struct {
+	ChunkIndex   int64  `json:"chunk_index"`
+	Status       string `json:"status"`
+	ReceivedHash string `json:"received_hash"`
+}

@@ -195,8 +195,13 @@ WHERE id = $1
 RETURNING id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
 `
 
-func (q *Queries) UpdateFileStatus(ctx context.Context, iD pgtype.UUID, status string) (File, error) {
-	row := q.db.QueryRow(ctx, updateFileStatus, iD, status)
+type UpdateFileStatusParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Status string      `json:"status"`
+}
+
+func (q *Queries) UpdateFileStatus(ctx context.Context, arg UpdateFileStatusParams) (File, error) {
+	row := q.db.QueryRow(ctx, updateFileStatus, arg.ID, arg.Status)
 	var i File
 	err := row.Scan(
 		&i.ID,

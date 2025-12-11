@@ -29,7 +29,19 @@ export interface FileMetadata {
   download_count: number;
 }
 
+export interface ChunkUploadResponse {
+  chunkIndex: number;
+  status: string;
+  receivedHash: string;
+}
+
 export interface ApiError {
   message: string;
   status: number;
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  message?: string;
+  data?: T;
 }

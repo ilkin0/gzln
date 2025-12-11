@@ -19,8 +19,71 @@ SELECT EXISTS(
 )
 `
 
-func (q *Queries) ChunkExistsByFileIdAndIndex(ctx context.Context, fileID pgtype.UUID, chunkIndex int32) (bool, error) {
-	row := q.db.QueryRow(ctx, chunkExistsByFileIdAndIndex, fileID, chunkIndex)
+type ChunkExistsByFileIdAndIndexParams struct {
+	FileID     pgtype.UUID `json:"file_id"`
+	ChunkIndex int32       `json:"chunk_index"`
+}
+
+func (q *Queries) ChunkExistsByFileIdAndIndex(ctx context.Context, arg ChunkExistsByFileIdAndIndexParams) (bool, error) {
+	row := q.db.QueryRow(ctx, chunkExistsByFileIdAndIndex, arg.FileID, arg.ChunkIndex)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const createChunk = `-- name: CreateChunk :one
+INSERT INTO chunks (
+    file_id,
+    chunk_index,
+    storage_path,
+    encrypted_size,
+    chunk_hash
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5
+)
+RETURNING id
+`
+
+type CreateChunkParams struct {
+	FileID        pgtype.UUID `json:"file_id"`
+	ChunkIndex    int32       `json:"chunk_index"`
+	StoragePath   string      `json:"storage_path"`
+	EncryptedSize int64       `json:"encrypted_size"`
+	ChunkHash     string      `json:"chunk_hash"`
+}
+
+func (q *Queries) CreateChunk(ctx context.Context, arg CreateChunkParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createChunk,
+		arg.FileID,
+		arg.ChunkIndex,
+		arg.StoragePath,
+		arg.EncryptedSize,
+		arg.ChunkHash,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const fileExistsByIdAndStatus = `-- name: FileExistsByIdAndStatus :one
+SELECT EXISTS(
+  SELECT 1
+  FROM files
+  WHERE id = $1 and status = $2
+)
+`
+
+type FileExistsByIdAndStatusParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Status string      `json:"status"`
+}
+
+func (q *Queries) FileExistsByIdAndStatus(ctx context.Context, arg FileExistsByIdAndStatusParams) (bool, error) {
+	row := q.db.QueryRow(ctx, fileExistsByIdAndStatus, arg.ID, arg.Status)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err

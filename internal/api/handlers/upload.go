@@ -9,13 +9,14 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/ilkin0/gzln/internal/api/types"
-	"github.com/ilkin0/gzln/internal/crypto"
 	"github.com/ilkin0/gzln/internal/service"
+	"github.com/ilkin0/gzln/internal/utils"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
 )
@@ -98,22 +99,22 @@ func (h *FileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 
 func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request) {
 	// TODO validate token??
-
-	err := r.ParseForm() /// TODO add max chunk Size
+	err := r.ParseForm()
 	if err != nil {
-		http.Error(w, "Failed to parse Form Data", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "Failed to parse form")
 		return
 	}
 
 	authToken := r.Header.Get("Authorization")
 	if authToken == "" {
-		http.Error(w, "Authorization token is missing", http.StatusUnauthorized)
+		utils.Error(w, http.StatusUnauthorized, "Authorization required")
 		return
 	}
 
-	file, _, err := r.FormFile("chunk")
+	/// TODO add max chunk Size validation
+	file, header, err := r.FormFile("chunk")
 	if err != nil {
-		http.Error(w, "File chunk is missing", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "File chunk is missing")
 		return
 	}
 	defer file.Close()
@@ -121,49 +122,64 @@ func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request)
 	// Validate Hash
 	chunkBytes, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "Failed to read the chunk", http.StatusInternalServerError)
+		utils.Error(w, http.StatusInternalServerError, "Failed to read chunk")
 		return
 	}
 
-	computedHash := crypto.HashBytes(chunkBytes)
-	requestHash := r.FormValue("hash")
-
-	if !crypto.CompareHash(requestHash, computedHash) {
-		http.Error(w, "Hash mismatch for chunk", http.StatusBadRequest)
-	}
-
-	// Validate chunk_index from DB
-	fileID := chi.URLParam(r, "fileId")
-	var fileUUID pgtype.UUID
-	err = fileUUID.Scan(fileID)
+	fileIDStr := chi.URLParam(r, "fileId")
+	var fileID pgtype.UUID
+	err = fileID.Scan(fileIDStr)
 	if err != nil {
-		http.Error(w, "Invalid FileID failed to parse pgtype.UUID", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "Invalid file ID")
 		return
 	}
 
 	chunkIndexStr := r.FormValue("chunk_index")
 	chunkIndex64, err := strconv.ParseInt(chunkIndexStr, 10, 32)
 	if err != nil {
-		http.Error(w, "Invalid chunk index", http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, "Invalid chunk index")
 		return
 	}
 
 	ctx := context.Background()
-	exists, err := h.chunkService.ExistsBy(ctx, fileUUID, int32(chunkIndex64))
-
-	if exists {
-		http.Error(w, "Chunk already uploaded with this ID", http.StatusBadRequest)
-		return
-	} else if err != nil {
-		http.Error(w, "Error duinr chunk id check", http.StatusInternalServerError)
+	req := types.ChunkUploadRequest{
+		FileID:       fileID,
+		ChunkIndex:   chunkIndex64,
+		ChunkData:    chunkBytes,
+		ExpectedHash: r.FormValue("hash"),
+		ContentType:  header.Header.Get("Content-Type"),
+		Filename:     header.Filename,
+	}
+	result, err := h.chunkService.ProcessChunkUpload(ctx, req)
+	if err != nil {
+		status := mapServiceErrorToHTTP(err)
+		utils.Error(w, status, err.Error())
 		return
 	}
 
-	// Upload chunk to MinIOS3
+	utils.Ok(w, types.ChunkUploadResponse{
+		ChunkIndex:   result.ChunkIndex,
+		Status:       result.Status,
+		ReceivedHash: result.ReceivedHash,
+	})
+}
 
-	// Inster a metadata Row in DBfor the chunk
-
-	// return response
+func mapServiceErrorToHTTP(err error) int {
+	errMsg := err.Error()
+	switch {
+	case strings.Contains(errMsg, "already uploaded"):
+		return http.StatusConflict
+	case strings.Contains(errMsg, "invalid"):
+		return http.StatusBadRequest
+	case strings.Contains(errMsg, "hash mismatch"):
+		return http.StatusBadRequest
+	case strings.Contains(errMsg, "not found"):
+		return http.StatusNotFound
+	case strings.Contains(errMsg, "not in uploading state"):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func getClientIP(r *http.Request) string {
@@ -195,7 +211,6 @@ func (h *FileHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Upload initialized: ShareID=%s, FileID=%s", response.ShareID, response.FileID)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)

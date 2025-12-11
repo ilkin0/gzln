@@ -57,7 +57,7 @@ func (m MinIOClient) UploadFile(ctx context.Context, file io.Reader, fileID stri
 
 	uploadInfo, err := m.Client.PutObject(ctx, m.BucketName, uniqueFileName, file, fileSize, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 	if err != nil {
-		return minio.UploadInfo{}, fmt.Errorf("Failed to upload chunk to MinIO", err)
+		return minio.UploadInfo{}, fmt.Errorf("Failed to upload chunk to MinIO: %w", err)
 	}
 
 	return uploadInfo, nil

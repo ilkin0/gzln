@@ -1,7 +1,7 @@
 {
-	"name": "web",
+	"name": "gzln-web",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -23,7 +23,7 @@
 		"svelte-check": "^4.3.2",
 		"tailwindcss": "^4.1.14",
 		"typescript": "^5.9.2",
-		"vite": "^7.1.7",
+		"vite": "^7.1.11",
 		"vitest": "^2.1.9"
 	}
 }

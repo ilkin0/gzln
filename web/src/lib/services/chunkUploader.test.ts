@@ -27,7 +27,7 @@ describe("ChunkUploader Service", () => {
       const file = new File([data], "test.bin");
 
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
-      mockUploadChunk.mockResolvedValue(undefined);
+      mockUploadChunk.mockResolvedValue({receivedHash: "", chunkIndex: 0, status: "success" });
 
       await uploadFileInChunks({
         file,
@@ -48,7 +48,7 @@ describe("ChunkUploader Service", () => {
       const file = new File([data], "test.bin");
 
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
-      mockUploadChunk.mockResolvedValue(undefined);
+      mockUploadChunk.mockResolvedValue({receivedHash: "", chunkIndex: 0, status: "success" });
 
       await uploadFileInChunks({
         file,
@@ -94,7 +94,7 @@ describe("ChunkUploader Service", () => {
       const file = new File([data], "test.bin");
 
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
-      mockUploadChunk.mockResolvedValue(undefined);
+      mockUploadChunk.mockResolvedValue({receivedHash: "", chunkIndex: 0, status: "success" });
 
       await uploadFileInChunks({
         file,
@@ -118,7 +118,7 @@ describe("ChunkUploader Service", () => {
       const file = new File([data], "test.bin");
 
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
-      mockUploadChunk.mockResolvedValue(undefined);
+      mockUploadChunk.mockResolvedValue({receivedHash: "", chunkIndex: 0, status: "success" });
 
       const onProgress = vi.fn();
 
@@ -150,7 +150,7 @@ describe("ChunkUploader Service", () => {
       const file = new File([data], "test.bin");
 
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
-      mockUploadChunk.mockResolvedValue(undefined);
+      mockUploadChunk.mockResolvedValue({receivedHash: "", chunkIndex: 0, status: "success" });
 
       await uploadFileInChunks({
         file,
@@ -171,7 +171,7 @@ describe("ChunkUploader Service", () => {
       const file = new File([data], "test.bin");
 
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
-      mockUploadChunk.mockResolvedValue(undefined);
+      mockUploadChunk.mockResolvedValue({receivedHash: "", chunkIndex: 0, status: "success" });
 
       const onProgress = vi.fn();
 
@@ -209,7 +209,7 @@ describe("ChunkUploader Service", () => {
         return new Promise((resolve) => {
           setTimeout(() => {
             concurrentCalls--;
-            resolve(undefined);
+            resolve({ status: "success", chunkIndex: 0, receivedHash: "", });
           }, 10);
         });
       });
@@ -234,7 +234,7 @@ describe("ChunkUploader Service", () => {
       const file = new File([data], "test.bin");
 
       const mockUploadChunk = vi.mocked(filesApi.filesApi.uploadChunk);
-      mockUploadChunk.mockResolvedValue(undefined);
+      mockUploadChunk.mockResolvedValue({ chunkIndex: 0, status: "success", receivedHash: "" });
 
       const onProgress = vi.fn();
 

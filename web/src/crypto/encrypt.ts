@@ -42,7 +42,7 @@ export async function generateSecureKey(): Promise<CryptoKey> {
   const salt = generateSalt()
 
   const encoder = new TextEncoder();
-  const passwordBuffer = encoder.encode(password);
+  const passwordBuffer = encoder.encode(password.toString());
   const saltBuffer = base64ToArrayBuffer(salt);
 
   const keyMaterial = await crypto.subtle.importKey(

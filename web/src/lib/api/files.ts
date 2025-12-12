@@ -1,9 +1,10 @@
-import { apiClient } from "./client";
+import {apiClient} from "./client";
 import type {
-  InitUploadRequest,
-  InitUploadResponse,
+  ApiResponse,
+  ChunkUploadResponse,
   FileMetadata,
-  ChunkUpladResponse
+  InitUploadRequest,
+  InitUploadResponse
 } from "$lib/types/api";
 
 export const filesApi = {
@@ -21,7 +22,7 @@ export const filesApi = {
     chunk: Blob,
     hash: string,
     uploadToken: string,
-  ): Promise<ChunkUpladResponse> {
+  ): Promise<ChunkUploadResponse> {
     const formData = new FormData();
     formData.append("chunk", chunk);
     formData.append("chunk_index", chunkIndex.toString());

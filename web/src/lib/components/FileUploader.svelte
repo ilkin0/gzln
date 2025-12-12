@@ -332,6 +332,8 @@
     <div>
       {#if !uploading}
         <div
+          role="region"
+          aria-label="File upload drop zone"
           ondragover={handleDragOver}
           ondragleave={handleDragLeave}
           ondrop={handleDrop}

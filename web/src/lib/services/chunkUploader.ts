@@ -1,10 +1,6 @@
-import { filesApi } from "$lib/api/files";
-import {
-  calculateChunks,
-  getFileChunk,
-  calculateChunkHash,
-} from "../../crypto/utils";
-import { encryptChunk } from "../../crypto/encrypt";
+import {filesApi} from "$lib/api/files";
+import {calculateChunkHash, calculateChunks, getFileChunk,} from "../../crypto/utils";
+import {encryptChunk} from "../../crypto/encrypt";
 
 const CONCURRENT_UPLOADS = 5;
 
@@ -73,7 +69,7 @@ export async function uploadFileInChunks(
       const encryptedChunk = await encryptChunk(chunk, encryptionKey);
       const hash = await calculateChunkHash(encryptedChunk);
       
-      const response: ApiResponse<ChunkUploadResponse> = await filesApi.uploadChunk(
+      const response = await filesApi.uploadChunk(
         fileId,
         chunkIndex,
         encryptedChunk,

@@ -164,6 +164,45 @@ func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (h *FileHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
+	var req types.InitUploadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
+		return
+	}
+
+	clientIP := getClientIP(r)
+
+	ctx := context.Background()
+	response, err := h.fileService.InitFileUpload(ctx, req, clientIP)
+	if err != nil {
+		log.Printf("Failed to init upload: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	utils.Ok(w, response)
+}
+
+func (h *FileHandler) FinalizeFileUpload(w http.ResponseWriter, r *http.Request) {
+	fileIDStr := chi.URLParam(r, "fileId")
+	var fileID pgtype.UUID
+	err := fileID.Scan(fileIDStr)
+	if err != nil {
+		utils.Error(w, http.StatusBadRequest, "Invalid file ID")
+		return
+	}
+
+	ctx := context.Background()
+	ures, err := h.fileService.FinalizeUpload(ctx, fileID)
+	if err != nil {
+		status := mapServiceErrorToHTTP(err)
+		utils.Error(w, status, err.Error())
+		return
+	}
+	utils.Ok(w, ures)
+}
+
 func mapServiceErrorToHTTP(err error) int {
 	errMsg := err.Error()
 	switch {
@@ -192,26 +231,4 @@ func getClientIP(r *http.Request) string {
 	}
 
 	return r.RemoteAddr
-}
-
-func (h *FileHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
-	var req types.InitUploadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
-		return
-	}
-
-	clientIP := getClientIP(r)
-
-	ctx := context.Background()
-	response, err := h.fileService.InitFileUpload(ctx, req, clientIP)
-	if err != nil {
-		log.Printf("Failed to init upload: %v", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
 }

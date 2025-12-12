@@ -27,3 +27,9 @@ SELECT EXISTS(
   FROM files
   WHERE id = $1 and status = $2
 );
+
+-- name: CountChunksByFileId :one
+SELECT
+    COUNT(ID)
+FROM chunks
+WHERE file_id = $1;

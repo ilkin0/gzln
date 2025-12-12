@@ -1,8 +1,8 @@
 import {apiClient} from "./client";
 import type {
-  ApiResponse,
   ChunkUploadResponse,
   FileMetadata,
+  FinalizeUploadResponse,
   InitUploadRequest,
   InitUploadResponse
 } from "$lib/types/api";
@@ -27,34 +27,15 @@ export const filesApi = {
     formData.append("chunk", chunk);
     formData.append("chunk_index", chunkIndex.toString());
     formData.append("hash", hash);
-    
-    try {
-      const response = await fetch(`/api/v1/files/${fileId}/chunks`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${uploadToken}`,
-        },
-        body: formData,
-      });
 
-      if (!response.ok) {
-        throw new Error(
-          `Chunk upload failed: ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const json: ApiResponse<ChunkUploadResponse> = await response.json();
-
-      if (!json.success) {
-        throw new Error(json.message || "Upload failed");
-      }
-
-      return json.data!;
-    } catch (error) {
-      if (error instanceof TypeError) {
-        throw new Error("Network error - please check your connection");
-      }
-      throw error;
-    }
+    return apiClient.postForm<ChunkUploadResponse>(
+        `/api/v1/files/${fileId}/chunks`,
+        formData,
+        {Authorization: `Bearer ${uploadToken}`}
+    );
   },
+
+  async finalizeUpload(fileId: string): Promise<FinalizeUploadResponse> {
+    return apiClient.post<FinalizeUploadResponse>(`/api/v1/files/${fileId}/finalize`);
+  }
 };

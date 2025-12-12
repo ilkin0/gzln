@@ -62,7 +62,6 @@ func (s *FileService) InitFileUpload(ctx context.Context, req types.InitUploadRe
 	}
 
 	expiresAt := time.Now().Add(time.Duration(expiresInHours) * time.Hour)
-
 	clientIP, err := netip.ParseAddr(clientIPStr)
 	if err != nil {
 		clientIP = netip.MustParseAddr("127.0.0.1")
@@ -83,7 +82,7 @@ func (s *FileService) InitFileUpload(ctx context.Context, req types.InitUploadRe
 		},
 		MaxDownloads: maxDownloads,
 		DeletionTokenHash: pgtype.Text{
-			String: uploadToken, // TODO: Hash this token before storing
+			String: uploadToken, // TODO: Hash deletion_token before storing?
 			Valid:  true,
 		},
 		UploaderIp: clientIP,
@@ -144,10 +143,38 @@ func (s *FileService) UpdateFileStatus(ctx context.Context, fileID pgtype.UUID, 
 	})
 }
 
-func (s *FileService) GetFileByID(ctx context.Context, fileID pgtype.UUID) (*sqlc.File, error) {
-	return nil, nil
+func (s *FileService) GetFileByID(ctx context.Context, fileID pgtype.UUID) (sqlc.File, error) {
+	return s.repository.GetFileByID(ctx, fileID)
 }
 
 func (s *FileService) IncrementDownloadCount(ctx context.Context, fileID pgtype.UUID) error {
 	return nil
+}
+
+func (s *FileService) FinalizeUpload(ctx context.Context, fileId pgtype.UUID) (types.FinalizeUploadResponse, error) {
+	// 1. Validate Chunk counts (also total chunk size??)
+	fileMetadata, err := s.GetFileByID(ctx, fileId)
+	if err != nil {
+		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to get file metadata: %w", err)
+	}
+
+	chunksCount, err := s.repository.CountChunksByFileId(ctx, fileId)
+	if err != nil {
+		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to count chunks: %w", err)
+	}
+
+	if chunksCount != int64(fileMetadata.ChunkCount) {
+		return types.FinalizeUploadResponse{}, fmt.Errorf("chunk count does not match file chunk count")
+	}
+
+	// 2. Update file status to done -> 'ready'
+	fileMetadata, err = s.UpdateFileStatus(ctx, fileMetadata.ID, "ready")
+	if err != nil {
+		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to update file status: %w", err)
+	}
+
+	return types.FinalizeUploadResponse{
+		ShareID:       fileMetadata.ShareID,
+		DeletionToken: fileMetadata.DeletionTokenHash.String,
+	}, nil
 }

@@ -254,3 +254,58 @@ func TestCreateChunk_VerifyAllFields(t *testing.T) {
 	assert.True(t, exists)
 	assert.Greater(t, chunkID, int64(0))
 }
+
+func TestCountChunksByFileId_Success(t *testing.T) {
+	if testQueries == nil {
+		t.Skip("Database not available")
+	}
+
+	ctx := context.Background()
+	cleanupFiles(t)
+
+	file := createTestFileForChunks(t, ctx)
+
+	for i := 0; i < 5; i++ {
+		params := createTestChunkParams(file.ID, int32(i))
+		_, err := testQueries.CreateChunk(ctx, params)
+		require.NoError(t, err)
+	}
+
+	count, err := testQueries.CountChunksByFileId(ctx, file.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), count)
+}
+
+func TestCountChunksByFileId_NoChunks(t *testing.T) {
+	if testQueries == nil {
+		t.Skip("Database not available")
+	}
+
+	ctx := context.Background()
+	cleanupFiles(t)
+
+	file := createTestFileForChunks(t, ctx)
+
+	count, err := testQueries.CountChunksByFileId(ctx, file.ID)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+}
+
+func TestCountChunksByFileId_NonExistentFile(t *testing.T) {
+	if testQueries == nil {
+		t.Skip("Database not available")
+	}
+
+	ctx := context.Background()
+	cleanupFiles(t)
+
+	nonExistentFileID := pgtype.UUID{Valid: true}
+	_ = nonExistentFileID.Scan("550e8400-e29b-41d4-a716-446655440000")
+
+	count, err := testQueries.CountChunksByFileId(ctx, nonExistentFileID)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+}

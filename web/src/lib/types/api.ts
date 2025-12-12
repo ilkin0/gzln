@@ -35,6 +35,11 @@ export interface ChunkUploadResponse {
   receivedHash: string;
 }
 
+export interface FinalizeUploadResponse {
+  share_id: string;
+  deletion_token: string;
+}
+
 export interface ApiError {
   message: string;
   status: number;

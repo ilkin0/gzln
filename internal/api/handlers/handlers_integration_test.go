@@ -86,10 +86,15 @@ func TestInitUpload_Integration_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp types.InitUploadResponse
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	var wrappedResp struct {
+		Success bool                     `json:"success"`
+		Data    types.InitUploadResponse `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &wrappedResp)
 	require.NoError(t, err)
+	require.True(t, wrappedResp.Success)
 
+	resp := wrappedResp.Data
 	assert.NotEmpty(t, resp.FileID)
 	assert.NotEmpty(t, resp.ShareID)
 	assert.NotEmpty(t, resp.UploadToken)
@@ -238,9 +243,15 @@ func TestInitUpload_Integration_IPExtraction(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, w.Code)
 
-			var resp types.InitUploadResponse
-			err = json.Unmarshal(w.Body.Bytes(), &resp)
+			var wrappedResp struct {
+				Success bool                     `json:"success"`
+				Data    types.InitUploadResponse `json:"data"`
+			}
+			err = json.Unmarshal(w.Body.Bytes(), &wrappedResp)
 			require.NoError(t, err)
+			require.True(t, wrappedResp.Success)
+
+			resp := wrappedResp.Data
 			assert.NotEmpty(t, resp.ShareID)
 		})
 	}
@@ -274,10 +285,15 @@ func TestInitUpload_Integration_DefaultValues(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp types.InitUploadResponse
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	var wrappedResp struct {
+		Success bool                     `json:"success"`
+		Data    types.InitUploadResponse `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &wrappedResp)
 	require.NoError(t, err)
+	require.True(t, wrappedResp.Success)
 
+	resp := wrappedResp.Data
 	expiryTime, err := time.Parse(time.RFC3339, resp.ExpiresAt)
 	require.NoError(t, err)
 	expectedExpiry := time.Now().Add(72 * time.Hour) // default expiryTime is 72 hrs

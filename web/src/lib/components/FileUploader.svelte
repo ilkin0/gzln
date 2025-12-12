@@ -160,8 +160,7 @@
   }
 
   function copyToClipboard() {
-    // url = `${window.location.origin}/d/${initUploadResult?.share_id}#/upload_token???`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(downloadLink);
     copied = true;
     setTimeout(() => {
       copied = false;

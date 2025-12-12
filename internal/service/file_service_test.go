@@ -48,6 +48,11 @@ func (m *MockQuerier) DeleteExpiredFiles(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *MockQuerier) CountChunksByFileId(ctx context.Context, fileID pgtype.UUID) (int64, error) {
+	args := m.Called(ctx, fileID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func createValidRequest() types.InitUploadRequest {
 	return types.InitUploadRequest{
 		Salt:              "random-salt-value",
@@ -383,4 +388,153 @@ func TestGenerateShareID(t *testing.T) {
 	for _, char := range shareID1 {
 		assert.Contains(t, validChars, string(char))
 	}
+}
+
+func TestFinalizeUpload_Success(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	fileID := pgtype.UUID{Valid: true}
+	_ = fileID.Scan("550e8400-e29b-41d4-a716-446655440000")
+
+	expectedFile := sqlc.File{
+		ID:                fileID,
+		ShareID:           "abc123def456",
+		ChunkCount:        10,
+		Status:            "uploading",
+		DeletionTokenHash: pgtype.Text{String: "deletion-token-123", Valid: true},
+	}
+
+	mockRepo.On("GetFileByID", ctx, fileID).
+		Return(expectedFile, nil)
+
+	mockRepo.On("CountChunksByFileId", ctx, fileID).
+		Return(int64(10), nil)
+
+	updatedFile := expectedFile
+	updatedFile.Status = "ready"
+	mockRepo.On("UpdateFileStatus", ctx, mock.AnythingOfType("sqlc.UpdateFileStatusParams")).
+		Return(updatedFile, nil)
+
+	result, err := service.FinalizeUpload(ctx, fileID)
+
+	require.NoError(t, err)
+	assert.Equal(t, "abc123def456", result.ShareID)
+	assert.Equal(t, "deletion-token-123", result.DeletionToken)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestFinalizeUpload_ChunkCountMismatch(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	fileID := pgtype.UUID{Valid: true}
+	_ = fileID.Scan("550e8400-e29b-41d4-a716-446655440000")
+
+	expectedFile := sqlc.File{
+		ID:         fileID,
+		ChunkCount: 10,
+		Status:     "uploading",
+	}
+
+	mockRepo.On("GetFileByID", ctx, fileID).
+		Return(expectedFile, nil)
+
+	// Only 7 chunks uploaded instead of 10
+	mockRepo.On("CountChunksByFileId", ctx, fileID).
+		Return(int64(7), nil)
+
+	result, err := service.FinalizeUpload(ctx, fileID)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "chunk count does not match")
+	assert.Equal(t, types.FinalizeUploadResponse{}, result)
+	mockRepo.AssertExpectations(t)
+	mockRepo.AssertNotCalled(t, "UpdateFileStatus")
+}
+
+func TestFinalizeUpload_FileNotFound(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	fileID := pgtype.UUID{Valid: true}
+	_ = fileID.Scan("550e8400-e29b-41d4-a716-446655440000")
+
+	expectedErr := errors.New("no rows in result set")
+	mockRepo.On("GetFileByID", ctx, fileID).
+		Return(sqlc.File{}, expectedErr)
+
+	result, err := service.FinalizeUpload(ctx, fileID)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get file metadata")
+	assert.Equal(t, types.FinalizeUploadResponse{}, result)
+	mockRepo.AssertExpectations(t)
+	mockRepo.AssertNotCalled(t, "CountChunksByFileId")
+	mockRepo.AssertNotCalled(t, "UpdateFileStatus")
+}
+
+func TestFinalizeUpload_CountChunksFailed(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	fileID := pgtype.UUID{Valid: true}
+	_ = fileID.Scan("550e8400-e29b-41d4-a716-446655440000")
+
+	expectedFile := sqlc.File{
+		ID:         fileID,
+		ChunkCount: 10,
+		Status:     "uploading",
+	}
+
+	mockRepo.On("GetFileByID", ctx, fileID).
+		Return(expectedFile, nil)
+
+	expectedErr := errors.New("database connection error")
+	mockRepo.On("CountChunksByFileId", ctx, fileID).
+		Return(int64(0), expectedErr)
+
+	result, err := service.FinalizeUpload(ctx, fileID)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to count chunks")
+	assert.Equal(t, types.FinalizeUploadResponse{}, result)
+	mockRepo.AssertExpectations(t)
+	mockRepo.AssertNotCalled(t, "UpdateFileStatus")
+}
+
+func TestFinalizeUpload_UpdateStatusFailed(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	fileID := pgtype.UUID{Valid: true}
+	_ = fileID.Scan("550e8400-e29b-41d4-a716-446655440000")
+
+	expectedFile := sqlc.File{
+		ID:         fileID,
+		ChunkCount: 10,
+		Status:     "uploading",
+	}
+
+	mockRepo.On("GetFileByID", ctx, fileID).
+		Return(expectedFile, nil)
+
+	mockRepo.On("CountChunksByFileId", ctx, fileID).
+		Return(int64(10), nil)
+
+	expectedErr := errors.New("update failed")
+	mockRepo.On("UpdateFileStatus", ctx, mock.AnythingOfType("sqlc.UpdateFileStatusParams")).
+		Return(sqlc.File{}, expectedErr)
+
+	result, err := service.FinalizeUpload(ctx, fileID)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to update file status")
+	assert.Equal(t, types.FinalizeUploadResponse{}, result)
+	mockRepo.AssertExpectations(t)
 }

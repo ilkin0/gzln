@@ -31,6 +31,20 @@ func (q *Queries) ChunkExistsByFileIdAndIndex(ctx context.Context, arg ChunkExis
 	return exists, err
 }
 
+const countChunksByFileId = `-- name: CountChunksByFileId :one
+SELECT
+    COUNT(ID)
+FROM chunks
+WHERE file_id = $1
+`
+
+func (q *Queries) CountChunksByFileId(ctx context.Context, fileID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countChunksByFileId, fileID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createChunk = `-- name: CreateChunk :one
 INSERT INTO chunks (
     file_id,

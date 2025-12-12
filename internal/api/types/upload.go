@@ -48,3 +48,8 @@ type ChunkUploadResponse struct {
 	Status       string `json:"status"`
 	ReceivedHash string `json:"received_hash"`
 }
+
+type FinalizeUploadResponse struct {
+	ShareID       string `json:"share_id"`
+	DeletionToken string `json:"deletion_token"`
+}

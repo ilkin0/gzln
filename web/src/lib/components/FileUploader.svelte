@@ -24,6 +24,7 @@
   let copied = $state(false);
   let isDragging = $state(false);
   let uploadProgress = $state<UploadProgressType | null>(null);
+  let downloadLink = $state("");
 
   function getUserFriendlyError(err: unknown): string {
     if (!(err instanceof Error)) {
@@ -117,7 +118,6 @@
       };
 
       const initResponse = await filesApi.initUpload(request);
-
       await uploadFileInChunks({
         file,
         fileId: initResponse.file_id,
@@ -131,7 +131,10 @@
           console.error(`Failed to upload chunk ${chunkIndex}:`, err);
         },
         concurrency: 5,
-      });
+      })
+
+      await filesApi.finalizeUpload(initResponse.file_id)
+      downloadLink = `${window.location.origin}/d/${initResponse.share_id}#upload_token???`;
 
       initUploadResult = {
         share_id: initResponse.share_id,
@@ -157,8 +160,7 @@
   }
 
   function copyToClipboard() {
-    const url = `${window.location.origin}/${initUploadResult?.share_id}`;
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(downloadLink);
     copied = true;
     setTimeout(() => {
       copied = false;
@@ -252,7 +254,7 @@
             <code
               class="flex-1 text-sm md:text-base font-mono text-blue-700 break-all"
             >
-              {window.location.origin}/{initUploadResult.share_id}
+              {downloadLink}
             </code>
           </div>
           <button

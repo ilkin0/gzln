@@ -15,5 +15,6 @@ func FileRoutes(fileService *service.FileService, chunkService *service.ChunkSer
 	r.Post("/upload", fileHandler.UploadFile)
 	r.Post("/upload/init", fileHandler.InitUpload)
 	r.Post("/{fileId}/chunks", chunkHandler.HandleChunkUpload)
+	r.Post("/{fileId}/finalize", fileHandler.FinalizeFileUpload)
 	return r
 }

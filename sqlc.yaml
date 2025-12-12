@@ -17,7 +17,6 @@ sql:
         emit_interface: true
         emit_exact_table_names: false
         emit_empty_slices: true
-        query_parameter_limit: 5
 overrides:
   go: null
 plugins: []

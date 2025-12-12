@@ -48,7 +48,6 @@ func (s *FileService) InitFileUpload(ctx context.Context, req types.InitUploadRe
 		return nil, err
 	}
 
-	fileID := uuid.New()
 	shareID := generateShareID()
 	uploadToken := uuid.New().String()
 
@@ -90,13 +89,13 @@ func (s *FileService) InitFileUpload(ctx context.Context, req types.InitUploadRe
 		UploaderIp: clientIP,
 	}
 
-	_, err = s.repository.CreateFile(ctx, params)
+	createdFile, err := s.repository.CreateFile(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file record: %w", err)
 	}
 
 	return &types.InitUploadResponse{
-		FileID:      fileID.String(),
+		FileID:      createdFile.ID.String(),
 		ShareID:     shareID,
 		UploadToken: uploadToken,
 		ExpiresAt:   expiresAt.Format(time.RFC3339),
@@ -139,5 +138,16 @@ func (s *FileService) GetFileByShareID(ctx context.Context, shareID string) (sql
 }
 
 func (s *FileService) UpdateFileStatus(ctx context.Context, fileID pgtype.UUID, status string) (sqlc.File, error) {
-	return s.repository.UpdateFileStatus(ctx, fileID, status)
+	return s.repository.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
+		ID:     fileID,
+		Status: status,
+	})
+}
+
+func (s *FileService) GetFileByID(ctx context.Context, fileID pgtype.UUID) (*sqlc.File, error) {
+	return nil, nil
+}
+
+func (s *FileService) IncrementDownloadCount(ctx context.Context, fileID pgtype.UUID) error {
+	return nil
 }

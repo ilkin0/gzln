@@ -38,7 +38,7 @@ func main() {
 
 	// Initialize FileService
 	fileService := service.NewFileService(db.Queries, minioClient.Client)
-	chunkService := service.NewChunkService(db.Queries, minioClient.Client)
+	chunkService := service.NewChunkService(db.Queries, minioClient.Client, minioClient.BucketName)
 
 	// Setup router
 	r := chi.NewRouter()

@@ -11,7 +11,8 @@ import (
 
 func TestFileRoutes_EndpointsRegistered(t *testing.T) {
 	fileService := service.NewFileService(nil, nil)
-	router := FileRoutes(fileService, "test-bucket")
+	chunkService := service.NewChunkService(nil, nil, "test-bucket")
+	router := FileRoutes(fileService, chunkService, "test-bucket")
 
 	tests := []struct {
 		name           string
@@ -47,7 +48,8 @@ func TestFileRoutes_EndpointsRegistered(t *testing.T) {
 
 func TestFileRoutes_MethodNotAllowed(t *testing.T) {
 	fileService := service.NewFileService(nil, nil)
-	router := FileRoutes(fileService, "test-bucket")
+	chunkService := service.NewChunkService(nil, nil, "test-bucket")
+	router := FileRoutes(fileService, chunkService, "test-bucket")
 
 	tests := []struct {
 		name   string
@@ -92,7 +94,8 @@ func TestFileRoutes_MethodNotAllowed(t *testing.T) {
 
 func TestFileRoutes_NonExistentPath(t *testing.T) {
 	fileService := service.NewFileService(nil, nil)
-	router := FileRoutes(fileService, "test-bucket")
+	chunkService := service.NewChunkService(nil, nil, "test-bucket")
+	router := FileRoutes(fileService, chunkService, "test-bucket")
 
 	req := httptest.NewRequest("GET", "/nonexistent", nil)
 	w := httptest.NewRecorder()

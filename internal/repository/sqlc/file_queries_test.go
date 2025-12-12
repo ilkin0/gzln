@@ -212,7 +212,10 @@ func TestUpdateFileStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "uploading", createdFile.Status)
 
-	updatedFile, err := testQueries.UpdateFileStatus(ctx, createdFile.ID, "ready")
+	updatedFile, err := testQueries.UpdateFileStatus(ctx, UpdateFileStatusParams{
+		ID:     createdFile.ID,
+		Status: "ready",
+	})
 
 	require.NoError(t, err)
 	assert.Equal(t, "ready", updatedFile.Status)
@@ -235,7 +238,10 @@ func TestUpdateFileStatus_NotFound(t *testing.T) {
 		Valid: true,
 	}
 
-	_, err := testQueries.UpdateFileStatus(ctx, nonExistentID, "ready")
+	_, err := testQueries.UpdateFileStatus(ctx, UpdateFileStatusParams{
+		ID:     nonExistentID,
+		Status: "ready",
+	})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no rows")
@@ -309,7 +315,10 @@ func TestDeleteExpiredFiles(t *testing.T) {
 	maxDownloadFile, err := testQueries.CreateFile(ctx, maxDownloadParams)
 	require.NoError(t, err)
 
-	_, err = testQueries.UpdateFileStatus(ctx, maxDownloadFile.ID, "ready")
+	_, err = testQueries.UpdateFileStatus(ctx, UpdateFileStatusParams{
+		ID:     maxDownloadFile.ID,
+		Status: "ready",
+	})
 	require.NoError(t, err)
 	_, err = testQueries.IncrementDownloadCount(ctx, maxDownloadFile.ID)
 	require.NoError(t, err)

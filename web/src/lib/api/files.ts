@@ -1,8 +1,10 @@
-import { apiClient } from "./client";
+import {apiClient} from "./client";
 import type {
-  InitUploadRequest,
-  InitUploadResponse,
+  ApiResponse,
+  ChunkUploadResponse,
   FileMetadata,
+  InitUploadRequest,
+  InitUploadResponse
 } from "$lib/types/api";
 
 export const filesApi = {
@@ -20,12 +22,12 @@ export const filesApi = {
     chunk: Blob,
     hash: string,
     uploadToken: string,
-  ): Promise<void> {
+  ): Promise<ChunkUploadResponse> {
     const formData = new FormData();
     formData.append("chunk", chunk);
     formData.append("chunk_index", chunkIndex.toString());
     formData.append("hash", hash);
-
+    
     try {
       const response = await fetch(`/api/v1/files/${fileId}/chunks`, {
         method: "POST",
@@ -40,6 +42,14 @@ export const filesApi = {
           `Chunk upload failed: ${response.status} ${response.statusText}`,
         );
       }
+
+      const json: ApiResponse<ChunkUploadResponse> = await response.json();
+
+      if (!json.success) {
+        throw new Error(json.message || "Upload failed");
+      }
+
+      return json.data!;
     } catch (error) {
       if (error instanceof TypeError) {
         throw new Error("Network error - please check your connection");

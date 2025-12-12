@@ -33,8 +33,8 @@ func (m *MockQuerier) GetFileByShareID(ctx context.Context, shareID string) (sql
 	return args.Get(0).(sqlc.File), args.Error(1)
 }
 
-func (m *MockQuerier) UpdateFileStatus(ctx context.Context, id pgtype.UUID, status string) (sqlc.File, error) {
-	args := m.Called(ctx, id, status)
+func (m *MockQuerier) UpdateFileStatus(ctx context.Context, arg sqlc.UpdateFileStatusParams) (sqlc.File, error) {
+	args := m.Called(ctx, arg)
 	return args.Get(0).(sqlc.File), args.Error(1)
 }
 
@@ -68,8 +68,11 @@ func TestInitFileUpload_Success(t *testing.T) {
 	ctx := context.Background()
 	clientIP := "192.168.1.1"
 
+	testFileID := pgtype.UUID{Valid: true}
+	_ = testFileID.Scan("550e8400-e29b-41d4-a716-446655440000")
+
 	mockRepo.On("CreateFile", ctx, mock.AnythingOfType("sqlc.CreateFileParams")).
-		Return(sqlc.File{}, nil)
+		Return(sqlc.File{ID: testFileID}, nil)
 
 	resp, err := service.InitFileUpload(ctx, req, clientIP)
 
@@ -338,7 +341,7 @@ func TestUpdateFileStatus(t *testing.T) {
 		Status: newStatus,
 	}
 
-	mockRepo.On("UpdateFileStatus", ctx, fileID, newStatus).
+	mockRepo.On("UpdateFileStatus", ctx, mock.AnythingOfType("sqlc.UpdateFileStatusParams")).
 		Return(expectedFile, nil)
 
 	result, err := service.UpdateFileStatus(ctx, fileID, newStatus)
@@ -357,7 +360,7 @@ func TestUpdateFileStatus_Error(t *testing.T) {
 	newStatus := "ready"
 
 	expectedErr := errors.New("update failed")
-	mockRepo.On("UpdateFileStatus", ctx, fileID, newStatus).
+	mockRepo.On("UpdateFileStatus", ctx, mock.AnythingOfType("sqlc.UpdateFileStatusParams")).
 		Return(sqlc.File{}, expectedErr)
 
 	result, err := service.UpdateFileStatus(ctx, fileID, newStatus)

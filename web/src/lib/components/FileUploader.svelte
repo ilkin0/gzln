@@ -134,7 +134,8 @@
       })
 
       await filesApi.finalizeUpload(initResponse.file_id)
-      downloadLink = `${window.location.origin}/d/${initResponse.share_id}#upload_token???`;
+      // downloadLink = `${window.location.origin}/${initResponse.share_id}#upload_token???`;
+      downloadLink = `${window.location.origin}/abc123DEF456#mockpassword123`;
 
       initUploadResult = {
         share_id: initResponse.share_id,

@@ -37,5 +37,41 @@ export const filesApi = {
 
   async finalizeUpload(fileId: string): Promise<FinalizeUploadResponse> {
     return apiClient.post<FinalizeUploadResponse>(`/api/v1/files/${fileId}/finalize`);
+  },
+
+  async getMockFileMetadata(shareId: string): Promise<FileMetadata> {
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    if (shareId === 'expired' || shareId === 'not-found') {
+      throw new Error('404: File not found or expired');
+    }
+    if (shareId === 'error') {
+      throw new Error('500: Server error');
+    }
+
+    const twoDaysFromNow = new Date();
+    twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
+
+    // Backend for Download feature is WIP. Generate real encrypted mock data
+    const { deriveKey, encryptString, generateSalt } = await import('../../crypto/encrypt');
+
+    const mockPassword = 'mockpassword123';
+    const salt = generateSalt();
+    const key = await deriveKey(mockPassword, salt);
+
+    const encryptedFilename = await encryptString('example-document.pdf', key);
+    const encryptedMimeType = await encryptString('application/pdf', key);
+
+    return {
+      share_id: shareId,
+      encrypted_filename: encryptedFilename,
+      encrypted_mime_type: encryptedMimeType,
+      salt: salt,
+      total_size: 15728640,
+      chunk_count: 3,
+      expires_at: twoDaysFromNow.toISOString(),
+      max_downloads: 10,
+      download_count: 3
+    };
   }
 };

@@ -60,7 +60,7 @@ test-short:
 # Frontend commands
 test-frontend:
 	@echo "Running frontend tests..."
-	@cd web && npm test
+	@cd web && npm run check && npm test
 
 test-frontend-watch:
 	@echo "Running frontend tests in watch mode..."

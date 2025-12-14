@@ -12,7 +12,6 @@
   }
 
   let { shareId, decryptionKey }: Props = $props();
-  console.log(`ShareID: ${shareId}, DepKey: ${decryptionKey}`)
 
   type PageState = "loading" | "ready" | "downloading" | "error" | "expired";
 
@@ -45,8 +44,7 @@
   async function loadFileMetadata() {
     pageState = "loading";
     try {
-      const data = await filesApi.getMockFileMetadata(shareId);
-
+      const data = await filesApi.getFileMetadata(shareId);
       if (isExpired(data.expires_at)) {
         pageState = "expired";
         return;

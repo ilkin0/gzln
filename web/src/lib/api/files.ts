@@ -13,7 +13,7 @@ export const filesApi = {
   },
 
   async getFileMetadata(shareId: string): Promise<FileMetadata> {
-    return apiClient.get<FileMetadata>(`/api/v1/files/${shareId}`);
+    return apiClient.get<FileMetadata>(`/api/v1/download/${shareId}/metadata`);
   },
 
   async uploadChunk(
@@ -49,29 +49,18 @@ export const filesApi = {
       throw new Error('500: Server error');
     }
 
-    const twoDaysFromNow = new Date();
-    twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
-
-    // Backend for Download feature is WIP. Generate real encrypted mock data
-    const { deriveKey, encryptString, generateSalt } = await import('../../crypto/encrypt');
-
-    const mockPassword = 'mockpassword123';
-    const salt = generateSalt();
-    const key = await deriveKey(mockPassword, salt);
-
-    const encryptedFilename = await encryptString('example-document.pdf', key);
-    const encryptedMimeType = await encryptString('application/pdf', key);
+    const mdata = await this.getFileMetadata(shareId)
+    const expiresAtFormatted = new Date(mdata.expires_at).toISOString();
 
     return {
-      share_id: shareId,
-      encrypted_filename: encryptedFilename,
-      encrypted_mime_type: encryptedMimeType,
-      salt: salt,
-      total_size: 15728640,
-      chunk_count: 3,
-      expires_at: twoDaysFromNow.toISOString(),
-      max_downloads: 10,
-      download_count: 3
+      encrypted_filename: mdata.encrypted_filename,
+      encrypted_mime_type: mdata.encrypted_mime_type,
+      salt: mdata.salt,
+      total_size: mdata.total_size,
+      chunk_count: mdata.chunk_count,
+      expires_at: expiresAtFormatted,
+      max_downloads: mdata.max_downloads,
+      download_count: mdata.download_count,
     };
-  }
+  },
 };

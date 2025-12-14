@@ -18,7 +18,6 @@ export interface InitUploadResponse {
 }
 
 export interface FileMetadata {
-  share_id: string;
   encrypted_filename: string;
   encrypted_mime_type: string;
   salt: string;

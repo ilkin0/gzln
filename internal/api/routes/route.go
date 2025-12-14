@@ -18,3 +18,15 @@ func FileRoutes(fileService *service.FileService, chunkService *service.ChunkSer
 	r.Post("/{fileId}/finalize", fileHandler.FinalizeFileUpload)
 	return r
 }
+
+func DownloadRoutes(fileService *service.FileService, chunkService *service.ChunkService, bucketName string) chi.Router {
+	r := chi.NewRouter()
+	fileHandler := handlers.NewFileHandler(fileService, bucketName)
+	chunkHandler := handlers.NewChunkHandler(chunkService, bucketName)
+
+	// Download routes
+	r.Get("/{shareId}/metadata", fileHandler.GetFileMetadata)
+	r.Get("/{shareId}/chunks/{chunkIndex}", chunkHandler.DownloadChunk)
+	r.Post("/{shareId}/complete", fileHandler.UploadFile) // TODO WIP
+	return r
+}

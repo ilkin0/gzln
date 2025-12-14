@@ -102,3 +102,32 @@ func (q *Queries) FileExistsByIdAndStatus(ctx context.Context, arg FileExistsByI
 	err := row.Scan(&exists)
 	return exists, err
 }
+
+const getChunkByIndexAndFileShareID = `-- name: GetChunkByIndexAndFileShareID :one
+SELECT
+    f.max_downloads,
+    f.download_count,
+    c.storage_path
+FROM chunks c
+JOIN files f on f.id = c.file_id
+WHERE f.share_id = $1 and c.chunk_index = $2
+  AND f.status = 'ready' AND f.expires_at > NOW()
+`
+
+type GetChunkByIndexAndFileShareIDParams struct {
+	ShareID    string `json:"share_id"`
+	ChunkIndex int32  `json:"chunk_index"`
+}
+
+type GetChunkByIndexAndFileShareIDRow struct {
+	MaxDownloads  int32  `json:"max_downloads"`
+	DownloadCount int32  `json:"download_count"`
+	StoragePath   string `json:"storage_path"`
+}
+
+func (q *Queries) GetChunkByIndexAndFileShareID(ctx context.Context, arg GetChunkByIndexAndFileShareIDParams) (GetChunkByIndexAndFileShareIDRow, error) {
+	row := q.db.QueryRow(ctx, getChunkByIndexAndFileShareID, arg.ShareID, arg.ChunkIndex)
+	var i GetChunkByIndexAndFileShareIDRow
+	err := row.Scan(&i.MaxDownloads, &i.DownloadCount, &i.StoragePath)
+	return i, err
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/ilkin0/gzln/internal/api/types"
 	"github.com/ilkin0/gzln/internal/crypto"
@@ -141,4 +142,35 @@ func (cs *ChunkService) fileExistsByIdAndStatus(ctx context.Context, fileID pgty
 		ID:     fileID,
 		Status: status,
 	})
+}
+
+func (cs *ChunkService) DownloadChunk(ctx context.Context, shareId string, chunkIndex int64) (io.ReadCloser, error) {
+	chunkDetails, err := cs.repository.GetChunkByIndexAndFileShareID(ctx, sqlc.GetChunkByIndexAndFileShareIDParams{
+		ShareID:    shareId,
+		ChunkIndex: int32(chunkIndex),
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chunk storage path: %w", err)
+	}
+
+	if chunkDetails.DownloadCount >= chunkDetails.MaxDownloads {
+		return nil, fmt.Errorf("chunk download limit reached")
+	}
+
+	chunk, err := cs.minioClient.GetObject(
+		ctx,
+		cs.bucketName,
+		chunkDetails.StoragePath,
+		minio.GetObjectOptions{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download chunk from storage: %w", err)
+	}
+
+	if _, err := chunk.Stat(); err != nil {
+		chunk.Close()
+		return nil, fmt.Errorf("failed to stat chunk: %w", err)
+	}
+	return chunk, nil
 }

@@ -1,16 +1,11 @@
 <script lang="ts">
-  import { filesApi } from "$lib/api/files";
-  import { MAX_FILE_SIZE, CHUNK_SIZE } from "$lib/config";
-  import type { InitUploadRequest } from "$lib/types/api";
-  import {
-    generateSecureKey,
-    encryptString,
-    generateSalt,
-    PBKDF2_ITERATIONS,
-  } from "../../crypto/encrypt";
-  import { calculateChunks } from "../../crypto/utils";
-  import { uploadFileInChunks } from "$lib/services/chunkUploader";
-  import type { UploadProgress as UploadProgressType } from "$lib/services/chunkUploader";
+  import {filesApi} from "$lib/api/files";
+  import {CHUNK_SIZE, MAX_FILE_SIZE} from "$lib/config";
+  import type {InitUploadRequest} from "$lib/types/api";
+  import {deriveKey, encryptString, generateSalt, PBKDF2_ITERATIONS,} from "../../crypto/encrypt";
+  import {arrayBufferToBase64, calculateChunks} from "../../crypto/utils";
+  import type {UploadProgress as UploadProgressType} from "$lib/services/chunkUploader";
+  import {uploadFileInChunks} from "$lib/services/chunkUploader";
   import UploadProgress from "./UploadProgress.svelte";
 
   let files: FileList | null = $state(null);
@@ -99,13 +94,14 @@
     uploadProgress = null;
 
     try {
+      const passwordBytes = crypto.getRandomValues(new Uint8Array(16));
+      const password = arrayBufferToBase64(passwordBytes.buffer);
       const salt = generateSalt();
-
-      const key = await generateSecureKey()
+      const key = await deriveKey(password, salt);
       const encryptedFilename = await encryptString(file.name, key);
       const encryptedMimeType = await encryptString(file.type, key);
 
-      const chunkCount = calculateChunks(file.size, CHUNK_SIZE);
+      const chunkCount = calculateChunks(file.size, CHUNK_SIZE); // TODO replace with dynamic chunk sizing -> estimateRequestCount()
 
       const request: InitUploadRequest = {
         salt,
@@ -134,8 +130,7 @@
       })
 
       await filesApi.finalizeUpload(initResponse.file_id)
-      // downloadLink = `${window.location.origin}/${initResponse.share_id}#upload_token???`;
-      downloadLink = `${window.location.origin}/abc123DEF456#mockpassword123`;
+      downloadLink = `${window.location.origin}/${initResponse.share_id}#${password}`;
 
       initUploadResult = {
         share_id: initResponse.share_id,

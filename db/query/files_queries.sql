@@ -41,3 +41,21 @@ RETURNING *;
 -- name: DeleteExpiredFiles :exec
 DELETE FROM files
 WHERE expires_at < now() OR (max_downloads <= download_count AND status = 'ready');
+
+-- name: GetFileSaltByShareId :one
+SELECT
+    salt
+FROM files
+WHERE share_id = $1;
+
+-- name: GetFileMetadataByShareId :one
+SELECT encrypted_filename,
+       encrypted_mime_type,
+       salt,
+       total_size,
+       chunk_count,
+       expires_at,
+       max_downloads,
+       download_count
+FROM files
+WHERE share_id = $1;

@@ -52,6 +52,7 @@ func main() {
 
 	// Mount routes
 	r.Mount("/api/v1/files", routes.FileRoutes(fileService, chunkService, minioClient.BucketName))
+	r.Mount("/api/v1/download", routes.DownloadRoutes(fileService, chunkService, minioClient.BucketName))
 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {

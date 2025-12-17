@@ -154,6 +154,60 @@ func (q *Queries) GetFileByShareID(ctx context.Context, shareID string) (File, e
 	return i, err
 }
 
+const getFileMetadataByShareId = `-- name: GetFileMetadataByShareId :one
+SELECT encrypted_filename,
+       encrypted_mime_type,
+       salt,
+       total_size,
+       chunk_count,
+       expires_at,
+       max_downloads,
+       download_count
+FROM files
+WHERE share_id = $1
+`
+
+type GetFileMetadataByShareIdRow struct {
+	EncryptedFilename string             `json:"encrypted_filename"`
+	EncryptedMimeType string             `json:"encrypted_mime_type"`
+	Salt              string             `json:"salt"`
+	TotalSize         int64              `json:"total_size"`
+	ChunkCount        int32              `json:"chunk_count"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	MaxDownloads      int32              `json:"max_downloads"`
+	DownloadCount     int32              `json:"download_count"`
+}
+
+func (q *Queries) GetFileMetadataByShareId(ctx context.Context, shareID string) (GetFileMetadataByShareIdRow, error) {
+	row := q.db.QueryRow(ctx, getFileMetadataByShareId, shareID)
+	var i GetFileMetadataByShareIdRow
+	err := row.Scan(
+		&i.EncryptedFilename,
+		&i.EncryptedMimeType,
+		&i.Salt,
+		&i.TotalSize,
+		&i.ChunkCount,
+		&i.ExpiresAt,
+		&i.MaxDownloads,
+		&i.DownloadCount,
+	)
+	return i, err
+}
+
+const getFileSaltByShareId = `-- name: GetFileSaltByShareId :one
+SELECT
+    salt
+FROM files
+WHERE share_id = $1
+`
+
+func (q *Queries) GetFileSaltByShareId(ctx context.Context, shareID string) (string, error) {
+	row := q.db.QueryRow(ctx, getFileSaltByShareId, shareID)
+	var salt string
+	err := row.Scan(&salt)
+	return salt, err
+}
+
 const incrementDownloadCount = `-- name: IncrementDownloadCount :one
 UPDATE files
 SET

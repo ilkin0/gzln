@@ -33,3 +33,13 @@ SELECT
     COUNT(ID)
 FROM chunks
 WHERE file_id = $1;
+
+-- name: GetChunkByIndexAndFileShareID :one
+SELECT
+    f.max_downloads,
+    f.download_count,
+    c.storage_path
+FROM chunks c
+JOIN files f on f.id = c.file_id
+WHERE f.share_id = $1 and c.chunk_index = $2
+  AND f.status = 'ready' AND f.expires_at > NOW();

@@ -178,3 +178,19 @@ func (s *FileService) FinalizeUpload(ctx context.Context, fileId pgtype.UUID) (t
 		DeletionToken: fileMetadata.DeletionTokenHash.String,
 	}, nil
 }
+
+func (s *FileService) GetFileSalt(ctx context.Context, shareID string) (string, error) {
+	salt, err := s.repository.GetFileSaltByShareId(ctx, shareID)
+	if err != nil {
+		return "", fmt.Errorf("salt could not be found for file with %s shareID", shareID)
+	}
+	return salt, nil
+}
+
+func (s *FileService) GetFileMetadataByShareID(ctx context.Context, shareID string) (sqlc.GetFileMetadataByShareIdRow, error) {
+	mdata, err := s.repository.GetFileMetadataByShareId(ctx, shareID)
+	if err != nil {
+		return sqlc.GetFileMetadataByShareIdRow{}, fmt.Errorf("file could not be found for %s shareID", shareID)
+	}
+	return mdata, nil
+}

@@ -17,8 +17,11 @@ type Querier interface {
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
 	DeleteExpiredFiles(ctx context.Context) error
 	FileExistsByIdAndStatus(ctx context.Context, arg FileExistsByIdAndStatusParams) (bool, error)
+	GetChunkByIndexAndFileShareID(ctx context.Context, arg GetChunkByIndexAndFileShareIDParams) (GetChunkByIndexAndFileShareIDRow, error)
 	GetFileByID(ctx context.Context, id pgtype.UUID) (File, error)
 	GetFileByShareID(ctx context.Context, shareID string) (File, error)
+	GetFileMetadataByShareId(ctx context.Context, shareID string) (GetFileMetadataByShareIdRow, error)
+	GetFileSaltByShareId(ctx context.Context, shareID string) (string, error)
 	IncrementDownloadCount(ctx context.Context, id pgtype.UUID) (File, error)
 	UpdateFileStatus(ctx context.Context, arg UpdateFileStatusParams) (File, error)
 }

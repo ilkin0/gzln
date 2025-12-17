@@ -53,6 +53,16 @@ func (m *MockQuerier) CountChunksByFileId(ctx context.Context, fileID pgtype.UUI
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockQuerier) GetFileSaltByShareId(ctx context.Context, shareID string) (string, error) {
+	args := m.Called(ctx, shareID)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockQuerier) GetFileMetadataByShareId(ctx context.Context, shareID string) (sqlc.GetFileMetadataByShareIdRow, error) {
+	args := m.Called(ctx, shareID)
+	return args.Get(0).(sqlc.GetFileMetadataByShareIdRow), args.Error(1)
+}
+
 func createValidRequest() types.InitUploadRequest {
 	return types.InitUploadRequest{
 		Salt:              "random-salt-value",
@@ -536,5 +546,117 @@ func TestFinalizeUpload_UpdateStatusFailed(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to update file status")
 	assert.Equal(t, types.FinalizeUploadResponse{}, result)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetFileSalt_Success(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	shareID := "test-share-12"
+	expectedSalt := "random-salt-value"
+
+	mockRepo.On("GetFileSaltByShareId", ctx, shareID).
+		Return(expectedSalt, nil)
+
+	result, err := service.GetFileSalt(ctx, shareID)
+
+	require.NoError(t, err)
+	assert.Equal(t, expectedSalt, result)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetFileSalt_NotFound(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	shareID := "non-existent"
+
+	expectedErr := errors.New("no rows in result set")
+	mockRepo.On("GetFileSaltByShareId", ctx, shareID).
+		Return("", expectedErr)
+
+	result, err := service.GetFileSalt(ctx, shareID)
+
+	require.Error(t, err)
+	assert.Empty(t, result)
+	assert.Contains(t, err.Error(), "salt could not be found")
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetFileMetadataByShareID_Success(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	shareID := "abc123def456"
+
+	expectedMetadata := sqlc.GetFileMetadataByShareIdRow{
+		EncryptedFilename: "encrypted-filename",
+		EncryptedMimeType: "encrypted-mime",
+		Salt:              "test-salt",
+		TotalSize:         1024 * 1024,
+		ChunkCount:        10,
+		ExpiresAt: pgtype.Timestamptz{
+			Time:  time.Now().Add(24 * time.Hour),
+			Valid: true,
+		},
+		MaxDownloads:  100,
+		DownloadCount: 5,
+	}
+
+	mockRepo.On("GetFileMetadataByShareId", ctx, shareID).
+		Return(expectedMetadata, nil)
+
+	result, err := service.GetFileMetadataByShareID(ctx, shareID)
+
+	require.NoError(t, err)
+	assert.Equal(t, expectedMetadata.EncryptedFilename, result.EncryptedFilename)
+	assert.Equal(t, expectedMetadata.EncryptedMimeType, result.EncryptedMimeType)
+	assert.Equal(t, expectedMetadata.Salt, result.Salt)
+	assert.Equal(t, expectedMetadata.TotalSize, result.TotalSize)
+	assert.Equal(t, expectedMetadata.ChunkCount, result.ChunkCount)
+	assert.Equal(t, expectedMetadata.MaxDownloads, result.MaxDownloads)
+	assert.Equal(t, expectedMetadata.DownloadCount, result.DownloadCount)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetFileMetadataByShareID_NotFound(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	shareID := "non-existent"
+
+	expectedErr := errors.New("no rows in result set")
+	mockRepo.On("GetFileMetadataByShareId", ctx, shareID).
+		Return(sqlc.GetFileMetadataByShareIdRow{}, expectedErr)
+
+	result, err := service.GetFileMetadataByShareID(ctx, shareID)
+
+	require.Error(t, err)
+	assert.Equal(t, sqlc.GetFileMetadataByShareIdRow{}, result)
+	assert.Contains(t, err.Error(), "file could not be found")
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetFileMetadataByShareID_DatabaseError(t *testing.T) {
+	mockRepo := new(MockQuerier)
+	service := NewFileService(mockRepo, nil)
+
+	ctx := context.Background()
+	shareID := "test-share-12"
+
+	expectedErr := errors.New("database connection error")
+	mockRepo.On("GetFileMetadataByShareId", ctx, shareID).
+		Return(sqlc.GetFileMetadataByShareIdRow{}, expectedErr)
+
+	result, err := service.GetFileMetadataByShareID(ctx, shareID)
+
+	require.Error(t, err)
+	assert.Equal(t, sqlc.GetFileMetadataByShareIdRow{}, result)
+	assert.Contains(t, err.Error(), "file could not be found")
 	mockRepo.AssertExpectations(t)
 }

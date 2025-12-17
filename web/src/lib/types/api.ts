@@ -18,7 +18,6 @@ export interface InitUploadResponse {
 }
 
 export interface FileMetadata {
-  share_id: string;
   encrypted_filename: string;
   encrypted_mime_type: string;
   salt: string;
@@ -38,6 +37,11 @@ export interface ChunkUploadResponse {
 export interface FinalizeUploadResponse {
   share_id: string;
   deletion_token: string;
+}
+
+export interface ChunkMetadata {
+  share_id: string;
+  download_token: string;
 }
 
 export interface ApiError {

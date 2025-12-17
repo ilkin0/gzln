@@ -38,29 +38,8 @@ export const filesApi = {
   async finalizeUpload(fileId: string): Promise<FinalizeUploadResponse> {
     return apiClient.post<FinalizeUploadResponse>(`/api/v1/files/${fileId}/finalize`);
   },
-
-  async getMockFileMetadata(shareId: string): Promise<FileMetadata> {
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    if (shareId === 'expired' || shareId === 'not-found') {
-      throw new Error('404: File not found or expired');
-    }
-    if (shareId === 'error') {
-      throw new Error('500: Server error');
-    }
-
-    const mdata = await this.getFileMetadata(shareId)
-    const expiresAtFormatted = new Date(mdata.expires_at).toISOString();
-
-    return {
-      encrypted_filename: mdata.encrypted_filename,
-      encrypted_mime_type: mdata.encrypted_mime_type,
-      salt: mdata.salt,
-      total_size: mdata.total_size,
-      chunk_count: mdata.chunk_count,
-      expires_at: expiresAtFormatted,
-      max_downloads: mdata.max_downloads,
-      download_count: mdata.download_count,
-    };
-  },
+  
+  async downloadChunk(shareId: string, chunkIndex: number): Promise<Response> {
+    return apiClient.getRaw(`/api/v1/download/${shareId}/chunks/${chunkIndex}`);
+  }
 };

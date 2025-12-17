@@ -101,7 +101,7 @@
       const encryptedFilename = await encryptString(file.name, key);
       const encryptedMimeType = await encryptString(file.type, key);
 
-      const chunkCount = calculateChunks(file.size, CHUNK_SIZE);
+      const chunkCount = calculateChunks(file.size, CHUNK_SIZE); // TODO replace with dynamic chunk sizing -> estimateRequestCount()
 
       const request: InitUploadRequest = {
         salt,

@@ -39,6 +39,11 @@ export interface FinalizeUploadResponse {
   deletion_token: string;
 }
 
+export interface ChunkMetadata {
+  share_id: string;
+  download_token: string;
+}
+
 export interface ApiError {
   message: string;
   status: number;

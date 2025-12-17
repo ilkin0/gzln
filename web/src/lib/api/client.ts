@@ -42,6 +42,41 @@ class ApiClient {
     return this.request<T>(endpoint, { method: "GET" });
   }
 
+  /**
+   * GET request that returns the raw Response object
+   * Use for binary data, streaming, or custom response handling
+   *
+   * @param endpoint - API endpoint
+   * @returns Promise<Response>
+   */
+  async getRaw(endpoint: string): Promise<Response> {
+    const url = `${this.baseUrl}${endpoint}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: this.mergeHeaders(),
+      });
+
+      if (!response.ok) {
+        throw {
+          message: `Request failed: ${response.statusText}`,
+          status: response.status,
+        } as ApiError;
+      }
+
+      return response;
+    } catch (error) {
+      if ((error as ApiError).status !== undefined) {
+        throw error;
+      }
+      throw {
+        message: "Network error. Please check your connection.",
+        status: 0,
+      } as ApiError;
+    }
+  }
+
   post<T>(endpoint: string, data?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: "POST",

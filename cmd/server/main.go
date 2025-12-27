@@ -28,6 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failedt initialize database: %v", err)
 	}
+	runTx := database.NewTxRunner(db.Pool)
 	defer db.Pool.Close()
 
 	// Initialize MinIO client
@@ -37,7 +38,7 @@ func main() {
 	}
 
 	// Initialize FileService
-	fileService := service.NewFileService(db.Queries, minioClient.Client)
+	fileService := service.NewFileService(db.Queries, runTx, minioClient.Client)
 	chunkService := service.NewChunkService(db.Queries, minioClient.Client, minioClient.BucketName)
 
 	// Setup router

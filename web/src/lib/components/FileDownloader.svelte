@@ -4,6 +4,8 @@
     import CountdownTimer from "./CountdownTimer.svelte";
     import {type DecryptedFileMetadata, loadAndDecryptMetadata} from "$lib/services/fileMetadata";
     import {downloadFileInChunks} from "$lib/services/chunkDownloader";
+    import { filesApi } from "$lib/api/files";
+    import { getDownloadErrorMessage } from "$lib/utils/errorMessages";
 
     interface Props {
         shareId: string;
@@ -12,7 +14,7 @@
 
     let {shareId, decryptionKey}: Props = $props();
 
-    type PageState = "loading" | "ready" | "downloading" | "error" | "expired";
+    type PageState = "loading" | "ready" | "downloading" | "error" | "expired" | "exhausted";
 
     let pageState: PageState = $state("loading");
     let metadata: DecryptedFileMetadata | null = $state(null);
@@ -23,26 +25,6 @@
     let downloadSpeed = $state(0);
     let eta = $state(0);
     let startTime = 0;
-
-    function getUserFriendlyError(err: unknown): string {
-        if (!(err instanceof Error)) return "Failed to load file information";
-
-        const message = err.message.toLowerCase();
-
-        if (message.includes("404") || message.includes("not found")) {
-            return "This file doesn't exist or has expired";
-        }
-
-        if (message.includes("failed to fetch") || message.includes("network")) {
-            return "Network error. Please check your connection.";
-        }
-
-        if (message.includes("decrypt")) {
-            return "Failed to decrypt file information. The link may be corrupted.";
-        }
-
-        return "Failed to load file. Please try again.";
-    }
 
     function formatETA(seconds: number): string {
         if (!seconds || seconds === Infinity || isNaN(seconds)) {
@@ -78,11 +60,16 @@
                 return;
             }
 
+            if (metadata.download_count >= metadata.max_downloads) {
+                pageState = "exhausted";
+                return;
+            }
+
             pageState = "ready";
         } catch (err) {
             console.error("Failed to load file metadata:", err);
             pageState = "error";
-            errorMessage = getUserFriendlyError(err);
+            errorMessage = getDownloadErrorMessage(err);
         }
     }
 
@@ -141,11 +128,12 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            pageState = "ready";
+            await filesApi.completeDownload(shareId);
+            await loadFileMetadata();
         } catch (err) {
             console.error("Download error:", err);
             pageState = "error";
-            errorMessage = getUserFriendlyError(err);
+            errorMessage = getDownloadErrorMessage(err);
         }
     }
 
@@ -261,6 +249,30 @@
                 <div>
                     <h3 class="text-sm font-semibold text-red-900 mb-1">File Expired</h3>
                     <p class="text-sm text-red-700">This file has expired and is no longer available for download</p>
+                </div>
+            </div>
+        </div>
+
+    {:else if pageState === "exhausted"}
+        <!-- Exhausted State -->
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-6">
+            <div class="flex items-start gap-3">
+                <svg
+                        class="w-6 h-6 text-amber-600 flex-shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                >
+                    <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                </svg>
+                <div>
+                    <h3 class="text-sm font-semibold text-amber-900 mb-1">Download Limit Reached</h3>
+                    <p class="text-sm text-amber-700">This file has reached its maximum download limit and is no longer available</p>
                 </div>
             </div>
         </div>

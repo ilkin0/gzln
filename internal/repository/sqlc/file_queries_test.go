@@ -247,53 +247,6 @@ func TestUpdateFileStatus_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "no rows")
 }
 
-func TestIncrementDownloadCount(t *testing.T) {
-	if testQueries == nil {
-		t.Skip("Database not available")
-	}
-	cleanupFiles(t)
-
-	ctx := context.Background()
-	params := createTestFileParams("inc12345678")
-
-	createdFile, err := testQueries.CreateFile(ctx, params)
-	require.NoError(t, err)
-	assert.Equal(t, int32(0), createdFile.DownloadCount)
-	assert.False(t, createdFile.LastDownloadedAt.Valid)
-
-	updatedFile, err := testQueries.IncrementDownloadCount(ctx, createdFile.ID)
-
-	require.NoError(t, err)
-	assert.Equal(t, int32(1), updatedFile.DownloadCount)
-	assert.True(t, updatedFile.LastDownloadedAt.Valid)
-
-	updatedFile2, err := testQueries.IncrementDownloadCount(ctx, createdFile.ID)
-
-	require.NoError(t, err)
-	assert.Equal(t, int32(2), updatedFile2.DownloadCount)
-	assert.True(t, updatedFile2.LastDownloadedAt.Valid)
-	assert.True(t, updatedFile2.LastDownloadedAt.Time.After(updatedFile.LastDownloadedAt.Time) ||
-		updatedFile2.LastDownloadedAt.Time.Equal(updatedFile.LastDownloadedAt.Time))
-}
-
-func TestIncrementDownloadCount_NotFound(t *testing.T) {
-	if testQueries == nil {
-		t.Skip("Database not available")
-	}
-	cleanupFiles(t)
-
-	ctx := context.Background()
-	nonExistentID := pgtype.UUID{
-		Bytes: [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-		Valid: true,
-	}
-
-	_, err := testQueries.IncrementDownloadCount(ctx, nonExistentID)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no rows")
-}
-
 func TestDeleteExpiredFiles(t *testing.T) {
 	if testQueries == nil {
 		t.Skip("Database not available")
@@ -315,14 +268,11 @@ func TestDeleteExpiredFiles(t *testing.T) {
 	maxDownloadFile, err := testQueries.CreateFile(ctx, maxDownloadParams)
 	require.NoError(t, err)
 
-	_, err = testQueries.UpdateFileStatus(ctx, UpdateFileStatusParams{
-		ID:     maxDownloadFile.ID,
-		Status: "ready",
-	})
-	require.NoError(t, err)
-	_, err = testQueries.IncrementDownloadCount(ctx, maxDownloadFile.ID)
-	require.NoError(t, err)
-	_, err = testQueries.IncrementDownloadCount(ctx, maxDownloadFile.ID)
+	_, err = testPool.Exec(ctx, `
+		UPDATE files
+		SET status = 'ready', download_count = 2
+		WHERE id = $1
+	`, maxDownloadFile.ID)
 	require.NoError(t, err)
 
 	validParams := createTestFileParams("valid12345")

@@ -38,8 +38,11 @@ export const filesApi = {
   async finalizeUpload(fileId: string): Promise<FinalizeUploadResponse> {
     return apiClient.post<FinalizeUploadResponse>(`/api/v1/files/${fileId}/finalize`);
   },
-  
+
   async downloadChunk(shareId: string, chunkIndex: number): Promise<Response> {
     return apiClient.getRaw(`/api/v1/download/${shareId}/chunks/${chunkIndex}`);
-  }
+  },
+    async completeDownload(shareId: string): Promise<void> {
+    await apiClient.post(`/api/v1/download/${shareId}/complete`);
+  },
 };

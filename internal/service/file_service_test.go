@@ -18,6 +18,13 @@ type MockQuerier struct {
 	mock.Mock
 }
 
+// mockTxRunner executes the transaction function with a nil Queries (for unit tests)
+// For tests that use transactions, the function will be executed, but queries will be nil
+// so tests need to mock the repository methods instead
+func mockTxRunner(ctx context.Context, fn func(*sqlc.Queries) error) error {
+	return fn(nil)
+}
+
 func (m *MockQuerier) CreateFile(ctx context.Context, arg sqlc.CreateFileParams) (sqlc.File, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).(sqlc.File), args.Error(1)
@@ -63,21 +70,43 @@ func (m *MockQuerier) GetFileMetadataByShareId(ctx context.Context, shareID stri
 	return args.Get(0).(sqlc.GetFileMetadataByShareIdRow), args.Error(1)
 }
 
+func (m *MockQuerier) CompleteFileDownloadByShareId(ctx context.Context, shareID string) (sqlc.CompleteFileDownloadByShareIdRow, error) {
+	args := m.Called(ctx, shareID)
+	return args.Get(0).(sqlc.CompleteFileDownloadByShareIdRow), args.Error(1)
+}
+
+func (m *MockQuerier) BeginTx(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockQuerier) Commit(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockQuerier) Rollback(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 func createValidRequest() types.InitUploadRequest {
+	// 1MB file, 256KB chunks = ceil(1MB/256KB) = 4 chunks
 	return types.InitUploadRequest{
 		Salt:              "random-salt-value",
 		EncryptedFilename: "encrypted-file-name",
 		EncryptedMimeType: "encrypted-mime-type",
 		TotalSize:         1024 * 1024, // 1MB
-		ChunkCount:        10,
-		ChunkSize:         1024,
+		ChunkCount:        4,           // ceil(1MB / 256KB) = 4
+		ChunkSize:         256 * 1024,  // 256KB
 		Pbkdf2Iterations:  100000,
 	}
 }
 
 func TestInitFileUpload_Success(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	mockTxRunner := mockTxRunner
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	req := createValidRequest()
 	ctx := context.Background()
@@ -105,7 +134,7 @@ func TestInitFileUpload_Success(t *testing.T) {
 
 func TestInitFileUpload_WithDefaults(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	req := createValidRequest()
 	req.MaxDownloads = 0
@@ -126,7 +155,7 @@ func TestInitFileUpload_WithDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	assert.Equal(t, int32(100), capturedParams.MaxDownloads)
+	assert.Equal(t, int32(5), capturedParams.MaxDownloads) // Default is 5
 
 	expiryTime, parseErr := time.Parse(time.RFC3339, resp.ExpiresAt)
 	require.NoError(t, parseErr)
@@ -138,7 +167,7 @@ func TestInitFileUpload_WithDefaults(t *testing.T) {
 
 func TestInitFileUpload_CustomMaxDownloadsAndExpiry(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	req := createValidRequest()
 	req.MaxDownloads = 5
@@ -171,7 +200,7 @@ func TestInitFileUpload_CustomMaxDownloadsAndExpiry(t *testing.T) {
 
 func TestInitFileUpload_InvalidIP(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	req := createValidRequest()
 	ctx := context.Background()
@@ -196,7 +225,7 @@ func TestInitFileUpload_InvalidIP(t *testing.T) {
 
 func TestInitFileUpload_RepositoryError(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	req := createValidRequest()
 	ctx := context.Background()
@@ -217,7 +246,7 @@ func TestInitFileUpload_RepositoryError(t *testing.T) {
 }
 
 func TestValidateUploadRequest(t *testing.T) {
-	service := NewFileService(nil, nil)
+	service := NewFileService(nil, nil, nil)
 
 	tests := []struct {
 		name        string
@@ -280,9 +309,59 @@ func TestValidateUploadRequest(t *testing.T) {
 			expectError: "pbkdf2_iterations must be positive",
 		},
 		{
-			name:        "file size exceeds 5GB",
-			req:         func() types.InitUploadRequest { r := createValidRequest(); r.TotalSize = 6 << 30; return r }(), // 6GB
+			name: "file size exceeds 5GB",
+			req: func() types.InitUploadRequest {
+				r := createValidRequest()
+				r.TotalSize = 6 << 30                                                             // 6GB
+				r.ChunkSize = 256 * 1024                                                          // 256KB
+				r.ChunkCount = int32((r.TotalSize + int64(r.ChunkSize) - 1) / int64(r.ChunkSize)) // ceil(6GB/256KB)
+				return r
+			}(),
 			expectError: "file size",
+		},
+		{
+			name: "chunk_count too low for total_size",
+			req: func() types.InitUploadRequest {
+				r := createValidRequest()
+				r.TotalSize = 1024 * 1024 // 1MB
+				r.ChunkSize = 100 * 1024  // 100KB
+				r.ChunkCount = 5          // Should be 11 (ceil(1MB/100KB))
+				return r
+			}(),
+			expectError: "chunk_count mismatch",
+		},
+		{
+			name: "chunk_count too high for total_size",
+			req: func() types.InitUploadRequest {
+				r := createValidRequest()
+				r.TotalSize = 1024 * 1024 // 1MB
+				r.ChunkSize = 200 * 1024  // 200KB
+				r.ChunkCount = 10         // Should be 6 (ceil(1MB/200KB))
+				return r
+			}(),
+			expectError: "chunk_count mismatch",
+		},
+		{
+			name: "valid request with exact division",
+			req: func() types.InitUploadRequest {
+				r := createValidRequest()
+				r.TotalSize = 1024 * 1024 // 1MB
+				r.ChunkSize = 256 * 1024  // 256KB
+				r.ChunkCount = 4          // ceil(1MB/256KB) = 4, last chunk = 256KB (exact)
+				return r
+			}(),
+			expectError: "",
+		},
+		{
+			name: "valid request with partial last chunk",
+			req: func() types.InitUploadRequest {
+				r := createValidRequest()
+				r.TotalSize = 1024*1024 + 512*1024 // 1.5MB
+				r.ChunkSize = 256 * 1024           // 256KB
+				r.ChunkCount = 6                   // ceil(1.5MB/256KB) = 6
+				return r
+			}(),
+			expectError: "",
 		},
 		{
 			name:        "valid request",
@@ -307,7 +386,7 @@ func TestValidateUploadRequest(t *testing.T) {
 
 func TestGetFileByShareID(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	shareID := "test-share-id"
@@ -328,7 +407,7 @@ func TestGetFileByShareID(t *testing.T) {
 
 func TestGetFileByShareID_NotFound(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	shareID := "non-existent"
@@ -347,7 +426,7 @@ func TestGetFileByShareID_NotFound(t *testing.T) {
 
 func TestUpdateFileStatus(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	fileID := pgtype.UUID{Valid: true}
@@ -368,7 +447,7 @@ func TestUpdateFileStatus(t *testing.T) {
 
 func TestUpdateFileStatus_Error(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	fileID := pgtype.UUID{Valid: true}
@@ -402,7 +481,7 @@ func TestGenerateShareID(t *testing.T) {
 
 func TestFinalizeUpload_Success(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	fileID := pgtype.UUID{Valid: true}
@@ -437,7 +516,7 @@ func TestFinalizeUpload_Success(t *testing.T) {
 
 func TestFinalizeUpload_ChunkCountMismatch(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	fileID := pgtype.UUID{Valid: true}
@@ -467,7 +546,7 @@ func TestFinalizeUpload_ChunkCountMismatch(t *testing.T) {
 
 func TestFinalizeUpload_FileNotFound(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	fileID := pgtype.UUID{Valid: true}
@@ -489,7 +568,7 @@ func TestFinalizeUpload_FileNotFound(t *testing.T) {
 
 func TestFinalizeUpload_CountChunksFailed(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	fileID := pgtype.UUID{Valid: true}
@@ -519,7 +598,7 @@ func TestFinalizeUpload_CountChunksFailed(t *testing.T) {
 
 func TestFinalizeUpload_UpdateStatusFailed(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	fileID := pgtype.UUID{Valid: true}
@@ -551,7 +630,7 @@ func TestFinalizeUpload_UpdateStatusFailed(t *testing.T) {
 
 func TestGetFileSalt_Success(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	shareID := "test-share-12"
@@ -569,7 +648,7 @@ func TestGetFileSalt_Success(t *testing.T) {
 
 func TestGetFileSalt_NotFound(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	shareID := "non-existent"
@@ -588,7 +667,7 @@ func TestGetFileSalt_NotFound(t *testing.T) {
 
 func TestGetFileMetadataByShareID_Success(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	shareID := "abc123def456"
@@ -625,7 +704,7 @@ func TestGetFileMetadataByShareID_Success(t *testing.T) {
 
 func TestGetFileMetadataByShareID_NotFound(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	shareID := "non-existent"
@@ -644,7 +723,7 @@ func TestGetFileMetadataByShareID_NotFound(t *testing.T) {
 
 func TestGetFileMetadataByShareID_DatabaseError(t *testing.T) {
 	mockRepo := new(MockQuerier)
-	service := NewFileService(mockRepo, nil)
+	service := NewFileService(mockRepo, mockTxRunner, nil)
 
 	ctx := context.Background()
 	shareID := "test-share-12"

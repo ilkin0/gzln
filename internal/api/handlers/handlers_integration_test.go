@@ -46,7 +46,8 @@ func setupTestHandler(t *testing.T) (*FileHandler, *database.Database, func()) {
 		return nil, nil, func() {}
 	}
 
-	fileService := service.NewFileService(db.Queries, minioClient.Client)
+	txRunner := database.NewTxRunner(db.Pool)
+	fileService := service.NewFileService(db.Queries, txRunner, minioClient.Client)
 	handler := NewFileHandler(fileService, minioClient.BucketName)
 
 	cleanup := func() {
@@ -67,9 +68,9 @@ func TestInitUpload_Integration_Success(t *testing.T) {
 		Salt:              "test-salt-value",
 		EncryptedFilename: "encrypted-filename",
 		EncryptedMimeType: "encrypted-mime-type",
-		TotalSize:         1024 * 1024,
-		ChunkCount:        10,
-		ChunkSize:         1024,
+		TotalSize:         1024 * 1024, // 1MB
+		ChunkCount:        4,           // ceil(1MB / 256KB) = 4
+		ChunkSize:         256 * 1024,  // 256KB
 		Pbkdf2Iterations:  100000,
 		MaxDownloads:      5,
 		ExpiresInHours:    24,
@@ -145,8 +146,8 @@ func TestInitUpload_Integration_MissingRequiredFields(t *testing.T) {
 				EncryptedFilename: "encrypted-filename",
 				EncryptedMimeType: "encrypted-mime-type",
 				TotalSize:         1024,
-				ChunkCount:        10,
-				ChunkSize:         1024,
+				ChunkCount:        4,          // ceil(1MB / 256KB) = 4
+				ChunkSize:         256 * 1024, // 256KB
 				Pbkdf2Iterations:  100000,
 			},
 			errorMsg: "salt is required",
@@ -157,8 +158,8 @@ func TestInitUpload_Integration_MissingRequiredFields(t *testing.T) {
 				Salt:              "test-salt",
 				EncryptedMimeType: "encrypted-mime-type",
 				TotalSize:         1024,
-				ChunkCount:        10,
-				ChunkSize:         1024,
+				ChunkCount:        4,          // ceil(1MB / 256KB) = 4
+				ChunkSize:         256 * 1024, // 256KB
 				Pbkdf2Iterations:  100000,
 			},
 			errorMsg: "encrypted_filename is required",
@@ -169,9 +170,9 @@ func TestInitUpload_Integration_MissingRequiredFields(t *testing.T) {
 				Salt:              "test-salt",
 				EncryptedFilename: "encrypted-filename",
 				EncryptedMimeType: "encrypted-mime-type",
-				TotalSize:         6 << 30, // 6GB
-				ChunkCount:        10,
-				ChunkSize:         1024,
+				TotalSize:         6 << 30,    // 6GB
+				ChunkCount:        24576,      // ceil(6GB / 256KB) = 24576
+				ChunkSize:         256 * 1024, // 256KB
 				Pbkdf2Iterations:  100000,
 			},
 			errorMsg: "file size",
@@ -207,8 +208,8 @@ func TestInitUpload_Integration_IPExtraction(t *testing.T) {
 		EncryptedFilename: "encrypted-filename",
 		EncryptedMimeType: "encrypted-mime-type",
 		TotalSize:         1024 * 1024,
-		ChunkCount:        10,
-		ChunkSize:         1024,
+		ChunkCount:        4,          // ceil(1MB / 256KB) = 4
+		ChunkSize:         256 * 1024, // 256KB
 		Pbkdf2Iterations:  100000,
 	}
 
@@ -269,8 +270,8 @@ func TestInitUpload_Integration_DefaultValues(t *testing.T) {
 		EncryptedFilename: "encrypted-filename",
 		EncryptedMimeType: "encrypted-mime-type",
 		TotalSize:         1024 * 1024,
-		ChunkCount:        10,
-		ChunkSize:         1024,
+		ChunkCount:        4,          // ceil(1MB / 256KB) = 4
+		ChunkSize:         256 * 1024, // 256KB
 		Pbkdf2Iterations:  100000,
 	}
 
@@ -311,9 +312,9 @@ func TestFinalizeUpload_Integration_Success(t *testing.T) {
 		Salt:              "test-salt-value",
 		EncryptedFilename: "encrypted-filename",
 		EncryptedMimeType: "encrypted-mime-type",
-		TotalSize:         1024 * 1024,
-		ChunkCount:        3,
-		ChunkSize:         1024,
+		TotalSize:         1024 * 1024, // 1MB
+		ChunkCount:        4,           // ceil(1MB / 256KB) = 4
+		ChunkSize:         256 * 1024,  // 256KB
 		Pbkdf2Iterations:  100000,
 	}
 
@@ -343,7 +344,7 @@ func TestFinalizeUpload_Integration_Success(t *testing.T) {
 	err = fileID.Scan(initResp.FileID)
 	require.NoError(t, err, "Failed to parse file ID: %s", initResp.FileID)
 
-	for i := int64(0); i < 3; i++ {
+	for i := int64(0); i < 4; i++ {
 		_, err := db.Queries.CreateChunk(ctx, sqlc.CreateChunkParams{
 			FileID:        fileID,
 			ChunkIndex:    int32(i),
@@ -428,9 +429,9 @@ func TestFinalizeUpload_Integration_ChunkCountMismatch(t *testing.T) {
 		Salt:              "test-salt-value",
 		EncryptedFilename: "encrypted-filename",
 		EncryptedMimeType: "encrypted-mime-type",
-		TotalSize:         1024 * 1024,
-		ChunkCount:        5,
-		ChunkSize:         1024,
+		TotalSize:         1024 * 1024, // 1MB
+		ChunkCount:        4,           // ceil(1MB / 256KB) = 4
+		ChunkSize:         256 * 1024,  // 256KB
 		Pbkdf2Iterations:  100000,
 	}
 

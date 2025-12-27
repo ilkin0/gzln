@@ -12,6 +12,49 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const completeFileDownloadByShareId = `-- name: CompleteFileDownloadByShareId :one
+WITH updated AS (
+    UPDATE files
+        SET
+            download_count = download_count + 1,
+            last_downloaded_at = now()
+        WHERE share_id = $1
+            AND status = 'ready'
+            AND (max_downloads = 0 OR download_count < max_downloads)
+            AND (expires_at IS NULL OR expires_at > now())
+        RETURNING id, share_id, download_count, max_downloads, expires_at)
+SELECT u.id,
+       u.share_id,
+       u.download_count,
+       u.max_downloads,
+       (u.max_downloads > 0 AND u.download_count = u.max_downloads) AS reached_limit,
+       expires_at
+FROM updated u
+`
+
+type CompleteFileDownloadByShareIdRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	ShareID       string             `json:"share_id"`
+	DownloadCount int32              `json:"download_count"`
+	MaxDownloads  int32              `json:"max_downloads"`
+	ReachedLimit  pgtype.Bool        `json:"reached_limit"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) CompleteFileDownloadByShareId(ctx context.Context, shareID string) (CompleteFileDownloadByShareIdRow, error) {
+	row := q.db.QueryRow(ctx, completeFileDownloadByShareId, shareID)
+	var i CompleteFileDownloadByShareIdRow
+	err := row.Scan(
+		&i.ID,
+		&i.ShareID,
+		&i.DownloadCount,
+		&i.MaxDownloads,
+		&i.ReachedLimit,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const createFile = `-- name: CreateFile :one
 INSERT INTO files (
     share_id,
@@ -206,40 +249,6 @@ func (q *Queries) GetFileSaltByShareId(ctx context.Context, shareID string) (str
 	var salt string
 	err := row.Scan(&salt)
 	return salt, err
-}
-
-const incrementDownloadCount = `-- name: IncrementDownloadCount :one
-UPDATE files
-SET
-    download_count = download_count + 1,
-    last_downloaded_at = now()
-WHERE id = $1
-RETURNING id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
-`
-
-func (q *Queries) IncrementDownloadCount(ctx context.Context, id pgtype.UUID) (File, error) {
-	row := q.db.QueryRow(ctx, incrementDownloadCount, id)
-	var i File
-	err := row.Scan(
-		&i.ID,
-		&i.ShareID,
-		&i.EncryptedFilename,
-		&i.EncryptedMimeType,
-		&i.Salt,
-		&i.Pbkdf2Iterations,
-		&i.TotalSize,
-		&i.ChunkCount,
-		&i.ChunkSize,
-		&i.Status,
-		&i.CreatedAt,
-		&i.ExpiresAt,
-		&i.LastDownloadedAt,
-		&i.MaxDownloads,
-		&i.DownloadCount,
-		&i.DeletionTokenHash,
-		&i.UploaderIp,
-	)
-	return i, err
 }
 
 const updateFileStatus = `-- name: UpdateFileStatus :one

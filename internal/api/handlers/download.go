@@ -75,3 +75,15 @@ func (h *ChunkHandler) DownloadChunk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func (h *FileHandler) CompleteDownload(w http.ResponseWriter, r *http.Request) {
+	shareID := chi.URLParam(r, "shareId")
+	ctx := context.Background()
+
+	err := h.fileService.CompleteDownload(ctx, shareID)
+	if err != nil {
+		utils.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	utils.Ok(w, nil)
+}

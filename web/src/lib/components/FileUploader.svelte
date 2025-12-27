@@ -3,10 +3,12 @@
   import {CHUNK_SIZE, MAX_FILE_SIZE} from "$lib/config";
   import type {InitUploadRequest} from "$lib/types/api";
   import {deriveKey, encryptString, generateSalt, PBKDF2_ITERATIONS,} from "../../crypto/encrypt";
-  import {arrayBufferToBase64, calculateChunks} from "../../crypto/utils";
+  import {arrayBufferToBase64} from "../../crypto/utils";
   import type {UploadProgress as UploadProgressType} from "$lib/services/chunkUploader";
   import {uploadFileInChunks} from "$lib/services/chunkUploader";
   import UploadProgress from "./UploadProgress.svelte";
+  import { getChunkSizeInfo } from "$lib/utils/chunkSizing";
+  import { getUploadErrorMessage } from "$lib/utils/errorMessages";
 
   let files: FileList | null = $state(null);
   let uploading = $state(false);
@@ -20,48 +22,6 @@
   let isDragging = $state(false);
   let uploadProgress = $state<UploadProgressType | null>(null);
   let downloadLink = $state("");
-
-  function getUserFriendlyError(err: unknown): string {
-    if (!(err instanceof Error)) {
-      return "Upload failed. Please try again.";
-    }
-
-    const message = err.message.toLowerCase();
-
-    if (message.includes("failed to fetch") || message.includes("network")) {
-      return "Network error. Please check your internet connection and try again.";
-    }
-
-    if (message.includes("404")) {
-      return "Upload service is temporarily unavailable. Please try again later.";
-    }
-
-    if (
-      message.includes("500") ||
-      message.includes("502") ||
-      message.includes("503")
-    ) {
-      return "Server error occurred. Please try again in a few moments.";
-    }
-
-    if (message.includes("401") || message.includes("403")) {
-      return "Upload session expired. Please try again.";
-    }
-
-    if (message.includes("413") || message.includes("too large")) {
-      return "File is too large. Maximum file size is 5 GB.";
-    }
-
-    if (message.includes("timeout") || message.includes("timed out")) {
-      return "Upload is taking too long. Please check your connection and try again.";
-    }
-
-    if (message.includes("chunk upload failed")) {
-      return "Upload was interrupted. Please try again.";
-    }
-
-    return "Upload failed. Please try again.";
-  }
 
   $effect(() => {
     if (
@@ -101,15 +61,14 @@
       const encryptedFilename = await encryptString(file.name, key);
       const encryptedMimeType = await encryptString(file.type, key);
 
-      const chunkCount = calculateChunks(file.size, CHUNK_SIZE); // TODO replace with dynamic chunk sizing -> estimateRequestCount()
-
+      const {requestCount, chunkSize} = getChunkSizeInfo(file.size);
       const request: InitUploadRequest = {
         salt,
         encrypted_filename: encryptedFilename,
         encrypted_mime_type: encryptedMimeType,
         total_size: file.size,
-        chunk_count: chunkCount,
-        chunk_size: CHUNK_SIZE,
+        chunk_count: requestCount,
+        chunk_size: chunkSize,
         pbkdf2_iterations: PBKDF2_ITERATIONS,
       };
 
@@ -118,7 +77,7 @@
         file,
         fileId: initResponse.file_id,
         uploadToken: initResponse.upload_token,
-        chunkSize: CHUNK_SIZE,
+        chunkSize: chunkSize,
         encryptionKey: key,
         onProgress: (progress) => {
           uploadProgress = progress;
@@ -139,7 +98,7 @@
       };
     } catch (err) {
       console.error("Upload error:", err);
-      error = getUserFriendlyError(err);
+      error = getUploadErrorMessage(err);
       files = null;
     } finally {
       uploading = false;

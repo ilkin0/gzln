@@ -10,7 +10,7 @@ import (
 )
 
 func TestFileRoutes_EndpointsRegistered(t *testing.T) {
-	fileService := service.NewFileService(nil, nil)
+	fileService := service.NewFileService(nil, nil, nil)
 	chunkService := service.NewChunkService(nil, nil, "test-bucket")
 	router := FileRoutes(fileService, chunkService, "test-bucket")
 
@@ -47,7 +47,7 @@ func TestFileRoutes_EndpointsRegistered(t *testing.T) {
 }
 
 func TestFileRoutes_MethodNotAllowed(t *testing.T) {
-	fileService := service.NewFileService(nil, nil)
+	fileService := service.NewFileService(nil, nil, nil)
 	chunkService := service.NewChunkService(nil, nil, "test-bucket")
 	router := FileRoutes(fileService, chunkService, "test-bucket")
 
@@ -93,7 +93,7 @@ func TestFileRoutes_MethodNotAllowed(t *testing.T) {
 }
 
 func TestFileRoutes_NonExistentPath(t *testing.T) {
-	fileService := service.NewFileService(nil, nil)
+	fileService := service.NewFileService(nil, nil, nil)
 	chunkService := service.NewChunkService(nil, nil, "test-bucket")
 	router := FileRoutes(fileService, chunkService, "test-bucket")
 
@@ -103,4 +103,12 @@ func TestFileRoutes_NonExistentPath(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code, "Non-existent route should return 404")
+}
+
+func TestDownloadRoutes_Creation(t *testing.T) {
+	fileService := service.NewFileService(nil, nil, nil)
+	chunkService := service.NewChunkService(nil, nil, "test-bucket")
+
+	router := DownloadRoutes(fileService, chunkService, "test-bucket")
+	assert.NotNil(t, router, "Download routes should be created successfully")
 }

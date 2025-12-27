@@ -50,10 +50,6 @@ func createValidChunkRequest() types.ChunkUploadRequest {
 	}
 }
 
-func TestProcessChunkUpload_Success(t *testing.T) {
-	t.Skip("Skipping MinIO integration test - requires actual MinIO instance or testcontainers")
-}
-
 func TestProcessChunkUpload_ChunkAlreadyExists(t *testing.T) {
 	mockRepo := new(MockQuerier)
 	service := NewChunkService(mockRepo, nil, "test-bucket")
@@ -234,18 +230,6 @@ func TestDownloadChunk_DownloadLimitReached(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "chunk download limit reached")
 	mockRepo.AssertExpectations(t)
-}
-
-func TestDownloadChunk_Success(t *testing.T) {
-	t.Skip("Skipping MinIO integration test - requires actual MinIO instance")
-}
-
-func TestDownloadChunk_ValidParams(t *testing.T) {
-	t.Skip("Skipping MinIO integration test - requires actual MinIO instance")
-}
-
-func TestDownloadChunk_DifferentChunkIndices(t *testing.T) {
-	t.Skip("Skipping MinIO integration test - requires actual MinIO instance")
 }
 
 func TestDownloadChunk_DownloadLimitEdgeCases(t *testing.T) {

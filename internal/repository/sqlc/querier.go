@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	ChunkExistsByFileIdAndIndex(ctx context.Context, arg ChunkExistsByFileIdAndIndexParams) (bool, error)
+	CompleteFileDownloadByShareId(ctx context.Context, shareID string) (CompleteFileDownloadByShareIdRow, error)
 	CountChunksByFileId(ctx context.Context, fileID pgtype.UUID) (int64, error)
 	CreateChunk(ctx context.Context, arg CreateChunkParams) (int64, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
@@ -22,7 +23,6 @@ type Querier interface {
 	GetFileByShareID(ctx context.Context, shareID string) (File, error)
 	GetFileMetadataByShareId(ctx context.Context, shareID string) (GetFileMetadataByShareIdRow, error)
 	GetFileSaltByShareId(ctx context.Context, shareID string) (string, error)
-	IncrementDownloadCount(ctx context.Context, id pgtype.UUID) (File, error)
 	UpdateFileStatus(ctx context.Context, arg UpdateFileStatusParams) (File, error)
 }
 

@@ -18,7 +18,7 @@ class ApiClient {
       });
 
       const payload: ApiResponse<T> = await res.json();
-      if (!payload?.success || payload.data === undefined) {
+      if (!payload?.success) {
         throw {
           message: (payload as unknown as { message?: string })?.message ?? `Request failed`,
           status: res.status,

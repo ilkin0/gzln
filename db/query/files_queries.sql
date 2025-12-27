@@ -30,14 +30,6 @@ SET status = $2
 WHERE id = $1
 RETURNING *;
 
--- name: IncrementDownloadCount :one
-UPDATE files
-SET
-    download_count = download_count + 1,
-    last_downloaded_at = now()
-WHERE id = $1
-RETURNING *;
-
 -- name: DeleteExpiredFiles :exec
 DELETE FROM files
 WHERE expires_at < now() OR (max_downloads <= download_count AND status = 'ready');
@@ -59,3 +51,22 @@ SELECT encrypted_filename,
        download_count
 FROM files
 WHERE share_id = $1;
+
+-- name: CompleteFileDownloadByShareId :one
+WITH updated AS (
+    UPDATE files
+        SET
+            download_count = download_count + 1,
+            last_downloaded_at = now()
+        WHERE share_id = $1
+            AND status = 'ready'
+            AND (max_downloads = 0 OR download_count < max_downloads)
+            AND (expires_at IS NULL OR expires_at > now())
+        RETURNING id, share_id, download_count, max_downloads, expires_at)
+SELECT u.id,
+       u.share_id,
+       u.download_count,
+       u.max_downloads,
+       (u.max_downloads > 0 AND u.download_count = u.max_downloads) AS reached_limit,
+       expires_at
+FROM updated u;

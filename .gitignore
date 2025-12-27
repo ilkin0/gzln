@@ -180,4 +180,3 @@ tmp/
 # Build artifacts
 /server
 /bin/
-*.out

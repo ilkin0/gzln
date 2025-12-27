@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/netip"
@@ -10,19 +11,30 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ilkin0/gzln/internal/api/types"
+	"github.com/ilkin0/gzln/internal/database"
 	"github.com/ilkin0/gzln/internal/repository/sqlc"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
+)
+
+var (
+	ErrNotFound             = errors.New("file not found")
+	ErrNotReady             = errors.New("file not ready")
+	ErrExpired              = errors.New("file expired")
+	ErrDownloadLimitReached = errors.New("download limit reached")
 )
 
 type FileService struct {
 	repository  sqlc.Querier
 	minioClient *minio.Client
+	runTx       database.TxRunner
 }
 
-func NewFileService(repository sqlc.Querier, minioClient *minio.Client) *FileService {
+func NewFileService(repository sqlc.Querier, runTx database.TxRunner, minioClient *minio.Client) *FileService {
 	return &FileService{
 		repository:  repository,
+		runTx:       runTx,
 		minioClient: minioClient,
 	}
 }
@@ -53,12 +65,12 @@ func (s *FileService) InitFileUpload(ctx context.Context, req types.InitUploadRe
 
 	maxDownloads := req.MaxDownloads
 	if maxDownloads == 0 {
-		maxDownloads = 100
+		maxDownloads = 5 // TODO make it configurable
 	}
 
 	expiresInHours := req.ExpiresInHours
 	if expiresInHours == 0 {
-		expiresInHours = 72
+		expiresInHours = 72 // TODO make it configurable
 	}
 
 	expiresAt := time.Now().Add(time.Duration(expiresInHours) * time.Hour)
@@ -120,13 +132,28 @@ func (s *FileService) validateUploadRequest(req types.InitUploadRequest) error {
 	if req.ChunkSize <= 0 {
 		return fmt.Errorf("chunk_size must be positive")
 	}
+
+	// Validate chunk_count calculation to ensure data integrity and prevent
+	// malicious/buggy clients from sending incorrect values that could cause
+	// incomplete uploads or storage inconsistencies
+	expectedChunkCount := (req.TotalSize + int64(req.ChunkSize) - 1) / int64(req.ChunkSize)
+	if int64(req.ChunkCount) != expectedChunkCount {
+		return fmt.Errorf("chunk_count mismatch: expected %d, got %d", expectedChunkCount,
+			req.ChunkCount)
+	}
+
+	lastChunkSize := req.TotalSize - (int64(req.ChunkCount-1) * int64(req.ChunkSize))
+	if lastChunkSize <= 0 || lastChunkSize > int64(req.ChunkSize) {
+		return fmt.Errorf("invalid last chunk size: %d", lastChunkSize)
+	}
+
 	if req.Pbkdf2Iterations <= 0 {
 		return fmt.Errorf("pbkdf2_iterations must be positive")
 	}
 
-	const maxFileSize = 5 << 30 // 5GB
+	const maxFileSize = 5 << 30 // 5GB TODO make it configurable
 	if req.TotalSize > maxFileSize {
-		return fmt.Errorf("file size %d exceeds maximum of 5GB", req.TotalSize)
+		return fmt.Errorf("file size %d exceeds maximum of %dGB", req.TotalSize, maxFileSize)
 	}
 
 	return nil
@@ -147,12 +174,7 @@ func (s *FileService) GetFileByID(ctx context.Context, fileID pgtype.UUID) (sqlc
 	return s.repository.GetFileByID(ctx, fileID)
 }
 
-func (s *FileService) IncrementDownloadCount(ctx context.Context, fileID pgtype.UUID) error {
-	return nil
-}
-
 func (s *FileService) FinalizeUpload(ctx context.Context, fileId pgtype.UUID) (types.FinalizeUploadResponse, error) {
-	// 1. Validate Chunk counts (also total chunk size??)
 	fileMetadata, err := s.GetFileByID(ctx, fileId)
 	if err != nil {
 		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to get file metadata: %w", err)
@@ -167,7 +189,6 @@ func (s *FileService) FinalizeUpload(ctx context.Context, fileId pgtype.UUID) (t
 		return types.FinalizeUploadResponse{}, fmt.Errorf("chunk count does not match file chunk count")
 	}
 
-	// 2. Update file status to done -> 'ready'
 	fileMetadata, err = s.UpdateFileStatus(ctx, fileMetadata.ID, "ready")
 	if err != nil {
 		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to update file status: %w", err)
@@ -193,4 +214,41 @@ func (s *FileService) GetFileMetadataByShareID(ctx context.Context, shareID stri
 		return sqlc.GetFileMetadataByShareIdRow{}, fmt.Errorf("file could not be found for %s shareID", shareID)
 	}
 	return mdata, nil
+}
+
+func (s *FileService) CompleteDownload(ctx context.Context, shareID string) error {
+	err := s.runTx(ctx, func(q *sqlc.Queries) error {
+		row, err := q.CompleteFileDownloadByShareId(ctx, shareID)
+		if err != nil {
+			return err
+		}
+		if row.ReachedLimit.Bool {
+			_, err = q.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{ID: row.ID, Status: "exhausted"})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("complete download failed: %w", err)
+	}
+
+	meta, gerr := s.repository.GetFileMetadataByShareId(ctx, shareID)
+	if gerr != nil {
+		return ErrNotFound
+	}
+	now := time.Now()
+	switch {
+	case meta.ExpiresAt.Valid && meta.ExpiresAt.Time.Before(now):
+		return ErrExpired
+	case meta.MaxDownloads > 0 && meta.DownloadCount >= meta.MaxDownloads:
+		return ErrDownloadLimitReached
+	default:
+		return ErrNotReady
+	}
 }

@@ -27,6 +27,6 @@ func DownloadRoutes(fileService *service.FileService, chunkService *service.Chun
 	// Download routes
 	r.Get("/{shareId}/metadata", fileHandler.GetFileMetadata)
 	r.Get("/{shareId}/chunks/{chunkIndex}", chunkHandler.DownloadChunk)
-	r.Post("/{shareId}/complete", fileHandler.UploadFile) // TODO WIP
+	r.Post("/{shareId}/complete", fileHandler.CompleteDownload)
 	return r
 }

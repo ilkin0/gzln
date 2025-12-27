@@ -35,7 +35,8 @@ func setupTestChunkHandler(t *testing.T) (*ChunkHandler, *service.FileService, f
 	}
 
 	chunkService := service.NewChunkService(db.Queries, minioClient.Client, minioClient.BucketName)
-	fileService := service.NewFileService(db.Queries, minioClient.Client)
+	txRunner := database.NewTxRunner(db.Pool)
+	fileService := service.NewFileService(db.Queries, txRunner, minioClient.Client)
 	handler := NewChunkHandler(chunkService, minioClient.BucketName)
 
 	cleanup := func() {
@@ -52,8 +53,8 @@ func createTestFile(t *testing.T, fileService *service.FileService) (string, str
 		EncryptedFilename: "encrypted-filename",
 		EncryptedMimeType: "encrypted-mime-type",
 		TotalSize:         1024 * 1024,
-		ChunkCount:        10,
-		ChunkSize:         1024,
+		ChunkCount:        4,          // ceil(1MB / 256KB) = 4
+		ChunkSize:         256 * 1024, // 256KB
 		Pbkdf2Iterations:  100000,
 		MaxDownloads:      5,
 		ExpiresInHours:    24,

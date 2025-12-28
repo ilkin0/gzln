@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/ilkin0/gzln/internal/api/routes"
 	"github.com/ilkin0/gzln/internal/database"
+	"github.com/ilkin0/gzln/internal/logger"
 	custommiddleware "github.com/ilkin0/gzln/internal/middleware"
 	"github.com/ilkin0/gzln/internal/service"
 	"github.com/ilkin0/gzln/internal/storage"
@@ -18,24 +20,45 @@ import (
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found or unable to load it")
+		slog.SetDefault(logger.Init())
+		slog.Warn("no .env file found or unable to load it",
+			slog.String("error", err.Error()),
+		)
+	} else {
+		slog.SetDefault(logger.Init())
 	}
 
 	ctx := context.Background()
 
+	slog.Info("starting gzln file sharing service",
+		slog.String("version", "1.0.0"),
+	)
+
 	// Initialize Database
 	db, err := database.NewDatabase(ctx)
 	if err != nil {
-		log.Fatalf("Failedt initialize database: %v", err)
+		slog.Error("failed to initialize database",
+			slog.String("error", err.Error()),
+		)
+		os.Exit(1)
 	}
 	runTx := database.NewTxRunner(db.Pool)
 	defer db.Pool.Close()
 
+	slog.Info("database initialized successfully")
+
 	// Initialize MinIO client
 	minioClient, err := storage.NewMinIOClient()
 	if err != nil {
-		log.Fatalf("Failed to initialize MinIO: %v", err)
+		slog.Error("failed to initialize MinIO",
+			slog.String("error", err.Error()),
+		)
+		os.Exit(1)
 	}
+
+	slog.Info("minio client initialized successfully",
+		slog.String("bucket", minioClient.BucketName),
+	)
 
 	// Initialize FileService
 	fileService := service.NewFileService(db.Queries, runTx, minioClient.Client)
@@ -48,7 +71,8 @@ func main() {
 	r.Use(custommiddleware.CORS)
 
 	// Standard middleware
-	r.Use(middleware.Logger)
+	r.Use(logger.RequestLogger)
+	r.Use(logger.RequestID)
 	r.Use(middleware.Recoverer)
 
 	// Mount routes
@@ -60,8 +84,16 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server starting on :%s", port)
+	slog.Info("server starting",
+		slog.String("port", port),
+		slog.String("address", fmt.Sprintf("http://localhost:%s", port)),
+	)
+
 	if err := http.ListenAndServe(":"+port, r); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		slog.Error("server failed",
+			slog.String("error", err.Error()),
+			slog.String("port", port),
+		)
+		os.Exit(1)
 	}
 }

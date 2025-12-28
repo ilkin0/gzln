@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/ilkin0/gzln/internal/api/types"
 	"github.com/ilkin0/gzln/internal/crypto"
@@ -49,29 +50,73 @@ func (cs *ChunkService) createChunkRecord(ctx context.Context, fileID pgtype.UUI
 }
 
 func (cs *ChunkService) ProcessChunkUpload(ctx context.Context, req types.ChunkUploadRequest) (types.ChunkUploadResponse, error) {
+	slog.Debug("processing chunk upload",
+		slog.String("file_id", req.FileID.String()),
+		slog.Int64("chunk_index", req.ChunkIndex),
+		slog.Int("chunk_size", len(req.ChunkData)),
+	)
+
 	// Validate chunk doesn't already exist and file exists with "uploading" status
 	err := cs.validateChunkUpload(ctx, req.FileID, req.ChunkIndex)
 	if err != nil {
+		slog.Warn("chunk validation failed",
+			slog.String("error", err.Error()),
+			slog.String("file_id", req.FileID.String()),
+			slog.Int64("chunk_index", req.ChunkIndex),
+		)
 		return types.ChunkUploadResponse{}, err
 	}
 
 	// Validate Hash
+	slog.Debug("validating chunk hash",
+		slog.String("file_id", req.FileID.String()),
+		slog.Int64("chunk_index", req.ChunkIndex),
+		slog.String("expected_hash", req.ExpectedHash),
+	)
+
 	err = cs.validateChunkHash(req.ChunkData, req.ExpectedHash)
 	if err != nil {
+		slog.Warn("chunk hash validation failed",
+			slog.String("error", err.Error()),
+			slog.String("file_id", req.FileID.String()),
+			slog.Int64("chunk_index", req.ChunkIndex),
+		)
 		return types.ChunkUploadResponse{}, err
 	}
 
 	// Upload to Storage
+	slog.Debug("uploading chunk to storage",
+		slog.String("file_id", req.FileID.String()),
+		slog.Int64("chunk_index", req.ChunkIndex),
+	)
+
 	filePath, err := cs.uploadChunkToStorage(ctx, req.FileID, req.ChunkIndex, req.ChunkData, req.ContentType, req.Filename)
 	if err != nil {
 		return types.ChunkUploadResponse{}, err
 	}
 
 	// Create chunk metadata record in database
+	slog.Debug("creating chunk metadata record",
+		slog.String("file_id", req.FileID.String()),
+		slog.Int64("chunk_index", req.ChunkIndex),
+		slog.String("storage_path", filePath),
+	)
+
 	_, err = cs.createChunkRecord(ctx, req.FileID, req.ChunkIndex, filePath, int64(len(req.ChunkData)), req.ExpectedHash)
 	if err != nil {
+		slog.Error("failed to create chunk record",
+			slog.String("error", err.Error()),
+			slog.String("file_id", req.FileID.String()),
+			slog.Int64("chunk_index", req.ChunkIndex),
+		)
 		return types.ChunkUploadResponse{}, err
 	}
+
+	slog.Info("chunk uploaded successfully",
+		slog.String("file_id", req.FileID.String()),
+		slog.Int64("chunk_index", req.ChunkIndex),
+		slog.String("hash", req.ExpectedHash),
+	)
 
 	return types.ChunkUploadResponse{
 		ChunkIndex:   req.ChunkIndex,
@@ -109,7 +154,12 @@ func (cs *ChunkService) uploadChunkToStorage(ctx context.Context, fileID pgtype.
 		},
 	)
 	if err != nil {
-		fmt.Printf("error uploading chunk to storage: %v\n", err)
+		slog.Error("failed to upload chunk to storage",
+			slog.String("error", err.Error()),
+			slog.String("file_id", fmt.Sprintf("%x-%x-%x-%x-%x", fileID.Bytes[0:4], fileID.Bytes[4:6], fileID.Bytes[6:8], fileID.Bytes[8:10], fileID.Bytes[10:16])),
+			slog.Int64("chunk_index", chunkIndex),
+			slog.String("object_name", objectName),
+		)
 		return "", err
 	}
 
@@ -144,19 +194,41 @@ func (cs *ChunkService) fileExistsByIdAndStatus(ctx context.Context, fileID pgty
 	})
 }
 
-func (cs *ChunkService) DownloadChunk(ctx context.Context, shareId string, chunkIndex int64) (io.ReadCloser, error) {
+func (cs *ChunkService) DownloadChunk(ctx context.Context, shareID string, chunkIndex int64) (io.ReadCloser, error) {
+	slog.Debug("fetching chunk details",
+		slog.String("share_id", shareID),
+		slog.Int64("chunk_index", chunkIndex),
+	)
+
 	chunkDetails, err := cs.repository.GetChunkByIndexAndFileShareID(ctx, sqlc.GetChunkByIndexAndFileShareIDParams{
-		ShareID:    shareId,
+		ShareID:    shareID,
 		ChunkIndex: int32(chunkIndex),
 	})
 
 	if err != nil {
+		slog.Warn("failed to get chunk metadata",
+			slog.String("error", err.Error()),
+			slog.String("share_id", shareID),
+			slog.Int64("chunk_index", chunkIndex),
+		)
 		return nil, fmt.Errorf("failed to get chunk storage path: %w", err)
 	}
 
 	if chunkDetails.DownloadCount >= chunkDetails.MaxDownloads {
+		slog.Warn("chunk download limit reached",
+			slog.String("share_id", shareID),
+			slog.Int64("chunk_index", chunkIndex),
+			slog.Int("download_count", int(chunkDetails.DownloadCount)),
+			slog.Int("max_downloads", int(chunkDetails.MaxDownloads)),
+		)
 		return nil, fmt.Errorf("chunk download limit reached")
 	}
+
+	slog.Debug("retrieving chunk from storage",
+		slog.String("share_id", shareID),
+		slog.Int64("chunk_index", chunkIndex),
+		slog.String("storage_path", chunkDetails.StoragePath),
+	)
 
 	chunk, err := cs.minioClient.GetObject(
 		ctx,
@@ -165,12 +237,29 @@ func (cs *ChunkService) DownloadChunk(ctx context.Context, shareId string, chunk
 		minio.GetObjectOptions{},
 	)
 	if err != nil {
+		slog.Error("failed to retrieve chunk from storage",
+			slog.String("error", err.Error()),
+			slog.String("share_id", shareID),
+			slog.Int64("chunk_index", chunkIndex),
+			slog.String("storage_path", chunkDetails.StoragePath),
+		)
 		return nil, fmt.Errorf("failed to download chunk from storage: %w", err)
 	}
 
 	if _, err := chunk.Stat(); err != nil {
 		chunk.Close()
+		slog.Error("failed to stat chunk object",
+			slog.String("error", err.Error()),
+			slog.String("share_id", shareID),
+			slog.Int64("chunk_index", chunkIndex),
+		)
 		return nil, fmt.Errorf("failed to stat chunk: %w", err)
 	}
+
+	slog.Info("chunk retrieved successfully",
+		slog.String("share_id", shareID),
+		slog.Int64("chunk_index", chunkIndex),
+	)
+
 	return chunk, nil
 }

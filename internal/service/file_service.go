@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/netip"
 	"time"
@@ -56,7 +57,17 @@ func generateShareID() string {
 }
 
 func (s *FileService) InitFileUpload(ctx context.Context, req types.InitUploadRequest, clientIPStr string) (*types.InitUploadResponse, error) {
+	slog.Debug("validating upload request",
+		slog.Int64("total_size", req.TotalSize),
+		slog.Int("chunk_count", int(req.ChunkCount)),
+		slog.String("client_ip", clientIPStr),
+	)
+
 	if err := s.validateUploadRequest(req); err != nil {
+		slog.Warn("upload validation failed",
+			slog.String("error", err.Error()),
+			slog.Int64("total_size", req.TotalSize),
+		)
 		return nil, err
 	}
 
@@ -76,8 +87,20 @@ func (s *FileService) InitFileUpload(ctx context.Context, req types.InitUploadRe
 	expiresAt := time.Now().Add(time.Duration(expiresInHours) * time.Hour)
 	clientIP, err := netip.ParseAddr(clientIPStr)
 	if err != nil {
+		slog.Warn("invalid client IP, using default",
+			slog.String("provided_ip", clientIPStr),
+			slog.String("error", err.Error()),
+		)
 		clientIP = netip.MustParseAddr("127.0.0.1")
 	}
+
+	slog.Info("creating file upload record",
+		slog.String("share_id", shareID),
+		slog.Int64("total_size", req.TotalSize),
+		slog.Int("chunk_count", int(req.ChunkCount)),
+		slog.Int("max_downloads", int(maxDownloads)),
+		slog.Int("expires_in_hours", expiresInHours),
+	)
 
 	params := sqlc.CreateFileParams{
 		ShareID:           shareID,
@@ -102,8 +125,18 @@ func (s *FileService) InitFileUpload(ctx context.Context, req types.InitUploadRe
 
 	createdFile, err := s.repository.CreateFile(ctx, params)
 	if err != nil {
+		slog.Error("failed to create file record",
+			slog.String("error", err.Error()),
+			slog.String("share_id", shareID),
+		)
 		return nil, fmt.Errorf("failed to create file record: %w", err)
 	}
+
+	slog.Info("file upload initialized successfully",
+		slog.String("share_id", shareID),
+		slog.String("file_id", createdFile.ID.String()),
+		slog.String("expires_at", expiresAt.Format(time.RFC3339)),
+	)
 
 	return &types.InitUploadResponse{
 		FileID:      createdFile.ID.String(),
@@ -174,25 +207,60 @@ func (s *FileService) GetFileByID(ctx context.Context, fileID pgtype.UUID) (sqlc
 	return s.repository.GetFileByID(ctx, fileID)
 }
 
-func (s *FileService) FinalizeUpload(ctx context.Context, fileId pgtype.UUID) (types.FinalizeUploadResponse, error) {
-	fileMetadata, err := s.GetFileByID(ctx, fileId)
+func (s *FileService) FinalizeUpload(ctx context.Context, fileID pgtype.UUID) (types.FinalizeUploadResponse, error) {
+	slog.Info("finalizing file upload",
+		slog.String("file_id", fileID.String()),
+	)
+
+	fileMetadata, err := s.GetFileByID(ctx, fileID)
 	if err != nil {
+		slog.Error("failed to get file metadata for finalization",
+			slog.String("error", err.Error()),
+			slog.String("file_id", fileID.String()),
+		)
 		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to get file metadata: %w", err)
 	}
 
-	chunksCount, err := s.repository.CountChunksByFileId(ctx, fileId)
+	slog.Debug("counting uploaded chunks",
+		slog.String("file_id", fileID.String()),
+		slog.Int("expected_chunks", int(fileMetadata.ChunkCount)),
+	)
+
+	chunksCount, err := s.repository.CountChunksByFileId(ctx, fileID)
 	if err != nil {
+		slog.Error("failed to count chunks",
+			slog.String("error", err.Error()),
+			slog.String("file_id", fileID.String()),
+		)
 		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to count chunks: %w", err)
 	}
 
 	if chunksCount != int64(fileMetadata.ChunkCount) {
+		slog.Warn("chunk count mismatch",
+			slog.String("file_id", fileID.String()),
+			slog.Int64("uploaded_chunks", chunksCount),
+			slog.Int("expected_chunks", int(fileMetadata.ChunkCount)),
+		)
 		return types.FinalizeUploadResponse{}, fmt.Errorf("chunk count does not match file chunk count")
 	}
 
+	slog.Debug("updating file status to ready",
+		slog.String("file_id", fileID.String()),
+	)
+
 	fileMetadata, err = s.UpdateFileStatus(ctx, fileMetadata.ID, "ready")
 	if err != nil {
+		slog.Error("failed to update file status",
+			slog.String("error", err.Error()),
+			slog.String("file_id", fileID.String()),
+		)
 		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to update file status: %w", err)
 	}
+
+	slog.Info("file upload finalized successfully",
+		slog.String("file_id", fileID.String()),
+		slog.String("share_id", fileMetadata.ShareID),
+	)
 
 	return types.FinalizeUploadResponse{
 		ShareID:       fileMetadata.ShareID,
@@ -217,14 +285,38 @@ func (s *FileService) GetFileMetadataByShareID(ctx context.Context, shareID stri
 }
 
 func (s *FileService) CompleteDownload(ctx context.Context, shareID string) error {
+	slog.Info("processing download completion",
+		slog.String("share_id", shareID),
+	)
+
 	err := s.runTx(ctx, func(q *sqlc.Queries) error {
 		row, err := q.CompleteFileDownloadByShareId(ctx, shareID)
 		if err != nil {
+			slog.Debug("download completion transaction failed",
+				slog.String("error", err.Error()),
+				slog.String("share_id", shareID),
+			)
 			return err
 		}
+
+		slog.Debug("download count incremented",
+			slog.String("share_id", shareID),
+			slog.Int("new_count", int(row.DownloadCount)),
+			slog.Bool("limit_reached", row.ReachedLimit.Bool),
+		)
+
 		if row.ReachedLimit.Bool {
+			slog.Info("download limit reached, marking as exhausted",
+				slog.String("share_id", shareID),
+				slog.Int("download_count", int(row.DownloadCount)),
+			)
+
 			_, err = q.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{ID: row.ID, Status: "exhausted"})
 			if err != nil {
+				slog.Error("failed to update file status to exhausted",
+					slog.String("error", err.Error()),
+					slog.String("share_id", shareID),
+				)
 				return err
 			}
 		}
@@ -232,23 +324,48 @@ func (s *FileService) CompleteDownload(ctx context.Context, shareID string) erro
 	})
 
 	if err == nil {
+		slog.Info("download completed successfully",
+			slog.String("share_id", shareID),
+		)
 		return nil
 	}
+
 	if !errors.Is(err, pgx.ErrNoRows) {
+		slog.Error("unexpected error completing download",
+			slog.String("error", err.Error()),
+			slog.String("share_id", shareID),
+		)
 		return fmt.Errorf("complete download failed: %w", err)
 	}
 
+	// Check why download failed
 	meta, gerr := s.repository.GetFileMetadataByShareId(ctx, shareID)
 	if gerr != nil {
+		slog.Warn("file not found",
+			slog.String("share_id", shareID),
+		)
 		return ErrNotFound
 	}
+
 	now := time.Now()
 	switch {
 	case meta.ExpiresAt.Valid && meta.ExpiresAt.Time.Before(now):
+		slog.Warn("file has expired",
+			slog.String("share_id", shareID),
+			slog.Time("expired_at", meta.ExpiresAt.Time),
+		)
 		return ErrExpired
 	case meta.MaxDownloads > 0 && meta.DownloadCount >= meta.MaxDownloads:
+		slog.Warn("download limit already reached",
+			slog.String("share_id", shareID),
+			slog.Int("download_count", int(meta.DownloadCount)),
+			slog.Int("max_downloads", int(meta.MaxDownloads)),
+		)
 		return ErrDownloadLimitReached
 	default:
+		slog.Warn("file not ready for download",
+			slog.String("share_id", shareID),
+		)
 		return ErrNotReady
 	}
 }

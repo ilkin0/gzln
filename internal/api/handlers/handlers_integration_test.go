@@ -357,7 +357,7 @@ func TestFinalizeUpload_Integration_Success(t *testing.T) {
 
 	httpReq2 := httptest.NewRequest("POST", "/"+initResp.FileID+"/finalize", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", initResp.FileID)
+	rctx.URLParams.Add("fileID", initResp.FileID)
 	httpReq2 = httpReq2.WithContext(context.WithValue(httpReq2.Context(), chi.RouteCtxKey, rctx))
 	w2 := httptest.NewRecorder()
 
@@ -387,7 +387,7 @@ func TestFinalizeUpload_Integration_InvalidFileID(t *testing.T) {
 
 	httpReq := httptest.NewRequest("POST", "/invalid-uuid/finalize", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", "invalid-uuid")
+	rctx.URLParams.Add("fileID", "invalid-uuid")
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -408,7 +408,7 @@ func TestFinalizeUpload_Integration_FileNotFound(t *testing.T) {
 
 	httpReq := httptest.NewRequest("POST", "/"+nonExistentFileID+"/finalize", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", nonExistentFileID)
+	rctx.URLParams.Add("fileID", nonExistentFileID)
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -474,7 +474,7 @@ func TestFinalizeUpload_Integration_ChunkCountMismatch(t *testing.T) {
 
 	httpReq2 := httptest.NewRequest("POST", "/"+initResp.FileID+"/finalize", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", initResp.FileID)
+	rctx.URLParams.Add("fileID", initResp.FileID)
 	httpReq2 = httpReq2.WithContext(context.WithValue(httpReq2.Context(), chi.RouteCtxKey, rctx))
 	w2 := httptest.NewRecorder()
 

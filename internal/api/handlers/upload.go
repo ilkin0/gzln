@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/ilkin0/gzln/internal/api/types"
+	"github.com/ilkin0/gzln/internal/logger"
 	"github.com/ilkin0/gzln/internal/service"
 	"github.com/ilkin0/gzln/internal/utils"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -91,22 +92,31 @@ func (h *FileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		URL:         fmt.Sprintf("/api/v1/files/%s", fileID+ext),
 	}
 
-	log.Printf("Response %+v", response)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Headers already sent, can't change status code
+		// Error will be logged by middleware
+		return
+	}
 }
 
 func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	// TODO validate token??
 	err := r.ParseForm()
 	if err != nil {
+		log.Warn("failed to parse form",
+			slog.String("error", err.Error()),
+		)
 		utils.Error(w, http.StatusBadRequest, "Failed to parse form")
 		return
 	}
 
 	authToken := r.Header.Get("Authorization")
 	if authToken == "" {
+		log.Warn("missing authorization header")
 		utils.Error(w, http.StatusUnauthorized, "Authorization required")
 		return
 	}
@@ -126,10 +136,14 @@ func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fileIDStr := chi.URLParam(r, "fileId")
+	fileIDStr := chi.URLParam(r, "fileID")
 	var fileID pgtype.UUID
 	err = fileID.Scan(fileIDStr)
 	if err != nil {
+		log.Warn("invalid file ID",
+			slog.String("file_id_str", fileIDStr),
+			slog.String("error", err.Error()),
+		)
 		utils.Error(w, http.StatusBadRequest, "Invalid file ID")
 		return
 	}
@@ -137,9 +151,19 @@ func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request)
 	chunkIndexStr := r.FormValue("chunk_index")
 	chunkIndex64, err := strconv.ParseInt(chunkIndexStr, 10, 32)
 	if err != nil {
+		log.Warn("invalid chunk index",
+			slog.String("chunk_index_str", chunkIndexStr),
+			slog.String("error", err.Error()),
+		)
 		utils.Error(w, http.StatusBadRequest, "Invalid chunk index")
 		return
 	}
+
+	log.Info("processing chunk upload",
+		slog.String("file_id", fileIDStr),
+		slog.Int64("chunk_index", chunkIndex64),
+		slog.Int64("chunk_size", int64(len(chunkBytes))),
+	)
 
 	ctx := context.Background()
 	req := types.ChunkUploadRequest{
@@ -152,10 +176,21 @@ func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := h.chunkService.ProcessChunkUpload(ctx, req)
 	if err != nil {
+		log.Error("chunk upload failed",
+			slog.String("error", err.Error()),
+			slog.String("file_id", fileIDStr),
+			slog.Int64("chunk_index", chunkIndex64),
+		)
 		status := mapServiceErrorToHTTP(err)
 		utils.Error(w, status, err.Error())
 		return
 	}
+
+	log.Info("chunk uploaded successfully",
+		slog.String("file_id", fileIDStr),
+		slog.Int64("chunk_index", chunkIndex64),
+		slog.String("hash", result.ReceivedHash),
+	)
 
 	utils.Ok(w, types.ChunkUploadResponse{
 		ChunkIndex:   result.ChunkIndex,
@@ -165,41 +200,82 @@ func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *FileHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
 	var req types.InitUploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn("invalid JSON in upload init request",
+			slog.String("error", err.Error()),
+		)
 		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
 		return
 	}
 
 	clientIP := getClientIP(r)
 
+	log.Info("initializing upload",
+		slog.Int64("total_size", req.TotalSize),
+		slog.Int("chunk_count", int(req.ChunkCount)),
+		slog.String("client_ip", clientIP),
+	)
+
 	ctx := context.Background()
 	response, err := h.fileService.InitFileUpload(ctx, req, clientIP)
 	if err != nil {
-		log.Printf("Failed to init upload: %v", err)
+		log.Error("failed to initialize upload",
+			slog.String("error", err.Error()),
+			slog.String("client_ip", clientIP),
+			slog.Int64("total_size", req.TotalSize),
+			slog.Int("chunk_count", int(req.ChunkCount)),
+		)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	log.Info("upload initialized successfully",
+		slog.String("share_id", response.ShareID),
+		slog.String("file_id", response.FileID),
+	)
 
 	utils.Ok(w, response)
 }
 
 func (h *FileHandler) FinalizeFileUpload(w http.ResponseWriter, r *http.Request) {
-	fileIDStr := chi.URLParam(r, "fileId")
+	log := logger.FromContext(r.Context())
+
+	fileIDStr := chi.URLParam(r, "fileID")
 	var fileID pgtype.UUID
 	err := fileID.Scan(fileIDStr)
 	if err != nil {
+		log.Warn("invalid file ID for finalization",
+			slog.String("file_id_str", fileIDStr),
+			slog.String("error", err.Error()),
+		)
 		utils.Error(w, http.StatusBadRequest, "Invalid file ID")
 		return
 	}
 
+	log.Info("finalizing upload",
+		slog.String("file_id", fileIDStr),
+	)
+
 	ctx := context.Background()
 	ures, err := h.fileService.FinalizeUpload(ctx, fileID)
 	if err != nil {
+		log.Error("failed to finalize upload",
+			slog.String("error", err.Error()),
+			slog.String("file_id", fileIDStr),
+		)
 		status := mapServiceErrorToHTTP(err)
 		utils.Error(w, status, err.Error())
 		return
 	}
+
+	log.Info("upload finalized successfully",
+		slog.String("file_id", fileIDStr),
+		slog.String("share_id", ures.ShareID),
+	)
+
 	utils.Ok(w, ures)
 }
 

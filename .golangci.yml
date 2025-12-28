@@ -1,0 +1,69 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  go: "1.25"
+
+linters:
+  enable:
+    # Code quality
+    - asciicheck
+    - copyloopvar
+    - godot
+    - goprintffuncname
+    - misspell
+    - nakedret
+    - nolintlint
+    - sqlclosecheck
+    - staticcheck
+    - unconvert
+    - whitespace
+
+    # Security
+    - gosec
+
+    # Standard checks
+    - govet
+    - ineffassign
+    - unused
+
+  disable:
+    - errcheck
+    - funlen
+    - gochecknoglobals
+    - gocognit
+    - goconst
+    - gocyclo
+    - godox
+    - lll
+    - nestif
+    - nlreturn
+    - noctx
+    - testpackage
+    - wsl
+
+  settings:
+    misspell:
+      locale: US
+
+    gosec:
+      excludes:
+        - G404  # Weak random number generator (we use crypto/rand where needed)
+        - G114  # HTTP server timeout (will be added in production setup)
+        - G115  # Integer overflow conversion (validation bounds chunk indices)
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - _test\.go
+      - internal/repository/sqlc/
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

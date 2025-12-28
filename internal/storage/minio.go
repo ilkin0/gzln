@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/minio/minio-go/v7"
@@ -43,7 +43,9 @@ func NewMinIOClient() (*MinIOClient, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bucket: %w", err)
 		}
-		log.Printf("Bucket %s created successfully", bucketName)
+		slog.Info("minio bucket created successfully",
+			slog.String("bucket_name", bucketName),
+		)
 	}
 
 	return &MinIOClient{
@@ -57,7 +59,7 @@ func (m MinIOClient) UploadFile(ctx context.Context, file io.Reader, fileID stri
 
 	uploadInfo, err := m.Client.PutObject(ctx, m.BucketName, uniqueFileName, file, fileSize, minio.PutObjectOptions{ContentType: "application/octet-stream"})
 	if err != nil {
-		return minio.UploadInfo{}, fmt.Errorf("Failed to upload chunk to MinIO: %w", err)
+		return minio.UploadInfo{}, fmt.Errorf("failed to upload chunk to MinIO: %w", err)
 	}
 
 	return uploadInfo, nil

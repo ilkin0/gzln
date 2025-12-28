@@ -60,7 +60,7 @@ func TestGetFileMetadata_Integration_Success(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/"+file.ShareID+"/metadata", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", file.ShareID)
+	rctx.URLParams.Add("shareID", file.ShareID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -93,7 +93,7 @@ func TestGetFileMetadata_Integration_FileNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/nonexistent/metadata", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", "nonexistent")
+	rctx.URLParams.Add("shareID", "nonexistent")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -141,7 +141,7 @@ func TestGetFileMetadata_Integration_FileExpired(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/"+file.ShareID+"/metadata", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", file.ShareID)
+	rctx.URLParams.Add("shareID", file.ShareID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -195,7 +195,7 @@ func TestCompleteDownload_Integration_Success(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/"+file.ShareID+"/complete", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", file.ShareID)
+	rctx.URLParams.Add("shareID", file.ShareID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -223,7 +223,7 @@ func TestCompleteDownload_Integration_FileNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/nonexistent/complete", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", "nonexistent")
+	rctx.URLParams.Add("shareID", "nonexistent")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -278,7 +278,7 @@ func TestCompleteDownload_Integration_FileExpired(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/"+file.ShareID+"/complete", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", file.ShareID)
+	rctx.URLParams.Add("shareID", file.ShareID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -325,7 +325,7 @@ func TestCompleteDownload_Integration_LimitReached(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/"+file.ShareID+"/complete", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", file.ShareID)
+	rctx.URLParams.Add("shareID", file.ShareID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -377,7 +377,7 @@ func TestCompleteDownload_Integration_NotReady(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/"+file.ShareID+"/complete", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", file.ShareID)
+	rctx.URLParams.Add("shareID", file.ShareID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	w := httptest.NewRecorder()
 
@@ -425,7 +425,7 @@ func TestCompleteDownload_Integration_MultipleDownloads(t *testing.T) {
 	for i := 1; i <= 3; i++ {
 		req := httptest.NewRequest("POST", "/"+file.ShareID+"/complete", nil)
 		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("shareId", file.ShareID)
+		rctx.URLParams.Add("shareID", file.ShareID)
 		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 		w := httptest.NewRecorder()
 
@@ -443,7 +443,7 @@ func TestCompleteDownload_Integration_MultipleDownloads(t *testing.T) {
 
 	req4 := httptest.NewRequest("POST", "/"+file.ShareID+"/complete", nil)
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("shareId", file.ShareID)
+	rctx.URLParams.Add("shareID", file.ShareID)
 	req4 = req4.WithContext(context.WithValue(req4.Context(), chi.RouteCtxKey, rctx))
 	w4 := httptest.NewRecorder()
 

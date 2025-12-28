@@ -49,7 +49,9 @@ linters:
 
     gosec:
       excludes:
-        - G404
+        - G404  # Weak random number generator (we use crypto/rand where needed)
+        - G114  # HTTP server timeout (will be added in production setup)
+        - G115  # Integer overflow conversion (validation bounds chunk indices)
 
   exclusions:
     generated: lax

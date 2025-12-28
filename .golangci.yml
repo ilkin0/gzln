@@ -7,6 +7,7 @@ run:
 
 linters:
   enable:
+    # Code quality
     - asciicheck
     - copyloopvar
     - godot
@@ -42,26 +43,25 @@ linters:
     - testpackage
     - wsl
 
-linters-settings:
-  misspell:
-    locale: US
+  settings:
+    misspell:
+      locale: US
 
-  gosec:
-    excludes:
-      - G404
+    gosec:
+      excludes:
+        - G404
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - _test\.go
+      - internal/repository/sqlc/
 
 issues:
-  # Use common exclusion patterns
-  exclude-use-default: true
-
-  exclude-rules:
-    # Exclude some linters from test files
-    - path: _test\.go
-      linters:
-        - gosec
-        - goconst
-
-    # Exclude generated files
-    - path: internal/repository/sqlc/
-      linters:
-        - all
+  max-issues-per-linter: 0
+  max-same-issues: 0

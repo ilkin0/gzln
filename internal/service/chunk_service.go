@@ -194,21 +194,21 @@ func (cs *ChunkService) fileExistsByIdAndStatus(ctx context.Context, fileID pgty
 	})
 }
 
-func (cs *ChunkService) DownloadChunk(ctx context.Context, shareId string, chunkIndex int64) (io.ReadCloser, error) {
+func (cs *ChunkService) DownloadChunk(ctx context.Context, shareID string, chunkIndex int64) (io.ReadCloser, error) {
 	slog.Debug("fetching chunk details",
-		slog.String("share_id", shareId),
+		slog.String("share_id", shareID),
 		slog.Int64("chunk_index", chunkIndex),
 	)
 
 	chunkDetails, err := cs.repository.GetChunkByIndexAndFileShareID(ctx, sqlc.GetChunkByIndexAndFileShareIDParams{
-		ShareID:    shareId,
+		ShareID:    shareID,
 		ChunkIndex: int32(chunkIndex),
 	})
 
 	if err != nil {
 		slog.Warn("failed to get chunk metadata",
 			slog.String("error", err.Error()),
-			slog.String("share_id", shareId),
+			slog.String("share_id", shareID),
 			slog.Int64("chunk_index", chunkIndex),
 		)
 		return nil, fmt.Errorf("failed to get chunk storage path: %w", err)
@@ -216,7 +216,7 @@ func (cs *ChunkService) DownloadChunk(ctx context.Context, shareId string, chunk
 
 	if chunkDetails.DownloadCount >= chunkDetails.MaxDownloads {
 		slog.Warn("chunk download limit reached",
-			slog.String("share_id", shareId),
+			slog.String("share_id", shareID),
 			slog.Int64("chunk_index", chunkIndex),
 			slog.Int("download_count", int(chunkDetails.DownloadCount)),
 			slog.Int("max_downloads", int(chunkDetails.MaxDownloads)),
@@ -225,7 +225,7 @@ func (cs *ChunkService) DownloadChunk(ctx context.Context, shareId string, chunk
 	}
 
 	slog.Debug("retrieving chunk from storage",
-		slog.String("share_id", shareId),
+		slog.String("share_id", shareID),
 		slog.Int64("chunk_index", chunkIndex),
 		slog.String("storage_path", chunkDetails.StoragePath),
 	)
@@ -239,7 +239,7 @@ func (cs *ChunkService) DownloadChunk(ctx context.Context, shareId string, chunk
 	if err != nil {
 		slog.Error("failed to retrieve chunk from storage",
 			slog.String("error", err.Error()),
-			slog.String("share_id", shareId),
+			slog.String("share_id", shareID),
 			slog.Int64("chunk_index", chunkIndex),
 			slog.String("storage_path", chunkDetails.StoragePath),
 		)
@@ -250,14 +250,14 @@ func (cs *ChunkService) DownloadChunk(ctx context.Context, shareId string, chunk
 		chunk.Close()
 		slog.Error("failed to stat chunk object",
 			slog.String("error", err.Error()),
-			slog.String("share_id", shareId),
+			slog.String("share_id", shareID),
 			slog.Int64("chunk_index", chunkIndex),
 		)
 		return nil, fmt.Errorf("failed to stat chunk: %w", err)
 	}
 
 	slog.Info("chunk retrieved successfully",
-		slog.String("share_id", shareId),
+		slog.String("share_id", shareID),
 		slog.Int64("chunk_index", chunkIndex),
 	)
 

@@ -94,7 +94,11 @@ func (h *FileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		// Headers already sent, can't change status code
+		// Error will be logged by middleware
+		return
+	}
 }
 
 func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +136,7 @@ func (h *ChunkHandler) HandleChunkUpload(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fileIDStr := chi.URLParam(r, "fileId")
+	fileIDStr := chi.URLParam(r, "fileID")
 	var fileID pgtype.UUID
 	err = fileID.Scan(fileIDStr)
 	if err != nil {
@@ -239,7 +243,7 @@ func (h *FileHandler) InitUpload(w http.ResponseWriter, r *http.Request) {
 func (h *FileHandler) FinalizeFileUpload(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 
-	fileIDStr := chi.URLParam(r, "fileId")
+	fileIDStr := chi.URLParam(r, "fileID")
 	var fileID pgtype.UUID
 	err := fileID.Scan(fileIDStr)
 	if err != nil {

@@ -1,0 +1,64 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - asciicheck
+    - copyloopvar
+    - godot
+    - goprintffuncname
+    - misspell
+    - nakedret
+    - nolintlint
+    - sqlclosecheck
+    - staticcheck
+    - unconvert
+    - whitespace
+
+    # Security
+    - gosec
+
+    # Standard checks
+    - govet
+    - ineffassign
+    - unused
+
+  disable:
+    - errcheck
+    - funlen
+    - gochecknoglobals
+    - gocognit
+    - goconst
+    - gocyclo
+    - godox
+    - lll
+    - nestif
+    - nlreturn
+    - noctx
+    - testpackage
+    - wsl
+
+linters-settings:
+  misspell:
+    locale: US
+
+  gosec:
+    excludes:
+      - G404
+
+issues:
+  # Use common exclusion patterns
+  exclude-use-default: true
+
+  exclude-rules:
+    # Exclude some linters from test files
+    - path: _test\.go
+      linters:
+        - gosec
+        - goconst
+
+    # Exclude generated files
+    - path: internal/repository/sqlc/
+      linters:
+        - all

@@ -110,7 +110,7 @@ func TestHandleChunkUpload_Integration_InvalidFileID(t *testing.T) {
 	httpReq.Header.Set("Authorization", "Bearer test-token")
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", "invalid-uuid")
+	rctx.URLParams.Add("fileID", "invalid-uuid")
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -145,7 +145,7 @@ func TestHandleChunkUpload_Integration_MissingChunkFile(t *testing.T) {
 	httpReq.Header.Set("Authorization", "Bearer test-token")
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", fileID)
+	rctx.URLParams.Add("fileID", fileID)
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -185,7 +185,7 @@ func TestHandleChunkUpload_Integration_InvalidChunkIndex(t *testing.T) {
 	httpReq.Header.Set("Authorization", "Bearer test-token")
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", fileID)
+	rctx.URLParams.Add("fileID", fileID)
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -225,7 +225,7 @@ func TestHandleChunkUpload_Integration_Success(t *testing.T) {
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", fileID)
+	rctx.URLParams.Add("fileID", fileID)
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -266,7 +266,7 @@ func TestHandleChunkUpload_Integration_HashMismatch(t *testing.T) {
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", fileID)
+	rctx.URLParams.Add("fileID", fileID)
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -306,7 +306,7 @@ func TestHandleChunkUpload_Integration_ChunkAlreadyExists(t *testing.T) {
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", fileID)
+	rctx.URLParams.Add("fileID", fileID)
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()
@@ -334,7 +334,7 @@ func TestHandleChunkUpload_Integration_ChunkAlreadyExists(t *testing.T) {
 	httpReq2.Header.Set("Authorization", "Bearer "+token)
 
 	rctx2 := chi.NewRouteContext()
-	rctx2.URLParams.Add("fileId", fileID)
+	rctx2.URLParams.Add("fileID", fileID)
 	httpReq2 = httpReq2.WithContext(context.WithValue(httpReq2.Context(), chi.RouteCtxKey, rctx2))
 
 	w2 := httptest.NewRecorder()
@@ -374,7 +374,7 @@ func TestHandleChunkUpload_Integration_FileNotFound(t *testing.T) {
 	httpReq.Header.Set("Authorization", "Bearer test-token")
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("fileId", fileID)
+	rctx.URLParams.Add("fileID", fileID)
 	httpReq = httpReq.WithContext(context.WithValue(httpReq.Context(), chi.RouteCtxKey, rctx))
 
 	w := httptest.NewRecorder()

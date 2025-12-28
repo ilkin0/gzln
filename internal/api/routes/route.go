@@ -14,8 +14,8 @@ func FileRoutes(fileService *service.FileService, chunkService *service.ChunkSer
 	// File routes
 	r.Post("/upload", fileHandler.UploadFile)
 	r.Post("/upload/init", fileHandler.InitUpload)
-	r.Post("/{fileId}/chunks", chunkHandler.HandleChunkUpload)
-	r.Post("/{fileId}/finalize", fileHandler.FinalizeFileUpload)
+	r.Post("/{fileID}/chunks", chunkHandler.HandleChunkUpload)
+	r.Post("/{fileID}/finalize", fileHandler.FinalizeFileUpload)
 	return r
 }
 
@@ -25,8 +25,8 @@ func DownloadRoutes(fileService *service.FileService, chunkService *service.Chun
 	chunkHandler := handlers.NewChunkHandler(chunkService, bucketName)
 
 	// Download routes
-	r.Get("/{shareId}/metadata", fileHandler.GetFileMetadata)
-	r.Get("/{shareId}/chunks/{chunkIndex}", chunkHandler.DownloadChunk)
-	r.Post("/{shareId}/complete", fileHandler.CompleteDownload)
+	r.Get("/{shareID}/metadata", fileHandler.GetFileMetadata)
+	r.Get("/{shareID}/chunks/{chunkIndex}", chunkHandler.DownloadChunk)
+	r.Post("/{shareID}/complete", fileHandler.CompleteDownload)
 	return r
 }

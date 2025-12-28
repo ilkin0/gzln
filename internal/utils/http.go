@@ -18,7 +18,11 @@ func WriteJSON(w http.ResponseWriter, status int, resp APIResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		// Headers already sent, can't change response
+		// Error will be logged by middleware
+		return
+	}
 }
 
 func Ok(w http.ResponseWriter, data any) {

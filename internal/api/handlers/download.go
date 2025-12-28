@@ -14,17 +14,17 @@ import (
 
 func (h *FileHandler) GetFileSalt(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
-	shareId := chi.URLParam(r, "shareId")
+	shareID := chi.URLParam(r, "shareID")
 	ctx := context.Background()
 
 	log.Debug("fetching file salt",
-		slog.String("share_id", shareId),
+		slog.String("share_id", shareID),
 	)
 
-	fs, err := h.fileService.GetFileSalt(ctx, shareId)
+	fs, err := h.fileService.GetFileSalt(ctx, shareID)
 	if err != nil {
 		log.Warn("file salt not found",
-			slog.String("share_id", shareId),
+			slog.String("share_id", shareID),
 			slog.String("error", err.Error()),
 		)
 		utils.Error(w, http.StatusNotFound, "Not found File salt with shareID")
@@ -35,17 +35,17 @@ func (h *FileHandler) GetFileSalt(w http.ResponseWriter, r *http.Request) {
 }
 func (h *FileHandler) GetFileMetadata(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
-	shareId := chi.URLParam(r, "shareId")
+	shareID := chi.URLParam(r, "shareID")
 	ctx := context.Background()
 
 	log.Info("fetching file metadata",
-		slog.String("share_id", shareId),
+		slog.String("share_id", shareID),
 	)
 
-	mdata, err := h.fileService.GetFileMetadataByShareID(ctx, shareId)
+	mdata, err := h.fileService.GetFileMetadataByShareID(ctx, shareID)
 	if err != nil {
 		log.Warn("file metadata not found",
-			slog.String("share_id", shareId),
+			slog.String("share_id", shareID),
 			slog.String("error", err.Error()),
 		)
 		utils.Error(w, http.StatusNotFound, "File metadata not found")
@@ -57,7 +57,7 @@ func (h *FileHandler) GetFileMetadata(w http.ResponseWriter, r *http.Request) {
 
 func (h *ChunkHandler) DownloadChunk(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
-	shareId := chi.URLParam(r, "shareId")
+	shareID := chi.URLParam(r, "shareID")
 	chunkIndexStr := chi.URLParam(r, "chunkIndex")
 
 	chunkIndex, err := strconv.ParseInt(chunkIndexStr, 10, 32)
@@ -71,12 +71,12 @@ func (h *ChunkHandler) DownloadChunk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info("downloading chunk",
-		slog.String("share_id", shareId),
+		slog.String("share_id", shareID),
 		slog.Int64("chunk_index", chunkIndex),
 	)
 
 	ctx := context.Background()
-	chunkReader, err := h.chunkService.DownloadChunk(ctx, shareId, chunkIndex)
+	chunkReader, err := h.chunkService.DownloadChunk(ctx, shareID, chunkIndex)
 
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -97,7 +97,7 @@ func (h *ChunkHandler) DownloadChunk(w http.ResponseWriter, r *http.Request) {
 
 		log.Error("chunk download failed",
 			slog.String("error", err.Error()),
-			slog.String("share_id", shareId),
+			slog.String("share_id", shareID),
 			slog.Int64("chunk_index", chunkIndex),
 			slog.Int("http_status", status),
 		)
@@ -109,7 +109,7 @@ func (h *ChunkHandler) DownloadChunk(w http.ResponseWriter, r *http.Request) {
 	defer chunkReader.Close()
 
 	log.Debug("streaming chunk data",
-		slog.String("share_id", shareId),
+		slog.String("share_id", shareID),
 		slog.Int64("chunk_index", chunkIndex),
 	)
 
@@ -117,21 +117,21 @@ func (h *ChunkHandler) DownloadChunk(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error("failed to stream chunk",
 			slog.String("error", err.Error()),
-			slog.String("share_id", shareId),
+			slog.String("share_id", shareID),
 			slog.Int64("chunk_index", chunkIndex),
 		)
 		return
 	}
 
 	log.Info("chunk downloaded successfully",
-		slog.String("share_id", shareId),
+		slog.String("share_id", shareID),
 		slog.Int64("chunk_index", chunkIndex),
 	)
 }
 
 func (h *FileHandler) CompleteDownload(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
-	shareID := chi.URLParam(r, "shareId")
+	shareID := chi.URLParam(r, "shareID")
 
 	log.Info("completing download",
 		slog.String("share_id", shareID),

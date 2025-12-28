@@ -207,37 +207,37 @@ func (s *FileService) GetFileByID(ctx context.Context, fileID pgtype.UUID) (sqlc
 	return s.repository.GetFileByID(ctx, fileID)
 }
 
-func (s *FileService) FinalizeUpload(ctx context.Context, fileId pgtype.UUID) (types.FinalizeUploadResponse, error) {
+func (s *FileService) FinalizeUpload(ctx context.Context, fileID pgtype.UUID) (types.FinalizeUploadResponse, error) {
 	slog.Info("finalizing file upload",
-		slog.String("file_id", fileId.String()),
+		slog.String("file_id", fileID.String()),
 	)
 
-	fileMetadata, err := s.GetFileByID(ctx, fileId)
+	fileMetadata, err := s.GetFileByID(ctx, fileID)
 	if err != nil {
 		slog.Error("failed to get file metadata for finalization",
 			slog.String("error", err.Error()),
-			slog.String("file_id", fileId.String()),
+			slog.String("file_id", fileID.String()),
 		)
 		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to get file metadata: %w", err)
 	}
 
 	slog.Debug("counting uploaded chunks",
-		slog.String("file_id", fileId.String()),
+		slog.String("file_id", fileID.String()),
 		slog.Int("expected_chunks", int(fileMetadata.ChunkCount)),
 	)
 
-	chunksCount, err := s.repository.CountChunksByFileId(ctx, fileId)
+	chunksCount, err := s.repository.CountChunksByFileId(ctx, fileID)
 	if err != nil {
 		slog.Error("failed to count chunks",
 			slog.String("error", err.Error()),
-			slog.String("file_id", fileId.String()),
+			slog.String("file_id", fileID.String()),
 		)
 		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to count chunks: %w", err)
 	}
 
 	if chunksCount != int64(fileMetadata.ChunkCount) {
 		slog.Warn("chunk count mismatch",
-			slog.String("file_id", fileId.String()),
+			slog.String("file_id", fileID.String()),
 			slog.Int64("uploaded_chunks", chunksCount),
 			slog.Int("expected_chunks", int(fileMetadata.ChunkCount)),
 		)
@@ -245,20 +245,20 @@ func (s *FileService) FinalizeUpload(ctx context.Context, fileId pgtype.UUID) (t
 	}
 
 	slog.Debug("updating file status to ready",
-		slog.String("file_id", fileId.String()),
+		slog.String("file_id", fileID.String()),
 	)
 
 	fileMetadata, err = s.UpdateFileStatus(ctx, fileMetadata.ID, "ready")
 	if err != nil {
 		slog.Error("failed to update file status",
 			slog.String("error", err.Error()),
-			slog.String("file_id", fileId.String()),
+			slog.String("file_id", fileID.String()),
 		)
 		return types.FinalizeUploadResponse{}, fmt.Errorf("failed to update file status: %w", err)
 	}
 
 	slog.Info("file upload finalized successfully",
-		slog.String("file_id", fileId.String()),
+		slog.String("file_id", fileID.String()),
 		slog.String("share_id", fileMetadata.ShareID),
 	)
 

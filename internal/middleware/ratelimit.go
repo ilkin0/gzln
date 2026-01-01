@@ -46,53 +46,30 @@ func getEnvInt(key string, defaultValue int) int {
 var config = LoadRateLimitConfig()
 
 func UploadInitLimiter() func(http.Handler) http.Handler {
-	return httprate.Limit(
-		config.UploadInitLimit,
-		config.TimeWindow,
-		httprate.WithKeyFuncs(httprate.KeyByIP),
-		httprate.WithLimitHandler(rateLimitExceededHandler(config.TimeWindow)),
-	)
+	return createLimiter(config.UploadInitLimit)
 }
 
 func ChunkUploadLimiter() func(http.Handler) http.Handler {
-	return httprate.Limit(
-		config.ChunkUploadLimit,
-		config.TimeWindow,
-		httprate.WithKeyFuncs(httprate.KeyByIP),
-		httprate.WithLimitHandler(rateLimitExceededHandler(config.TimeWindow)),
-	)
+	return createLimiter(config.ChunkUploadLimit)
 }
 
 func UploadFinalizeLimiter() func(http.Handler) http.Handler {
-	return httprate.Limit(
-		config.UploadFinalizeLimit,
-		config.TimeWindow,
-		httprate.WithKeyFuncs(httprate.KeyByIP),
-		httprate.WithLimitHandler(rateLimitExceededHandler(config.TimeWindow)),
-	)
+	return createLimiter(config.UploadFinalizeLimit)
 }
 
-func MetadataLimiter() func(http.Handler) http.Handler {
-	return httprate.Limit(
-		config.MetadataLimit,
-		config.TimeWindow,
-		httprate.WithKeyFuncs(httprate.KeyByIP),
-		httprate.WithLimitHandler(rateLimitExceededHandler(config.TimeWindow)),
-	)
-}
+func MetadataLimiter() func(http.Handler) http.Handler { return createLimiter(config.MetadataLimit) }
 
 func ChunkDownloadLimiter() func(http.Handler) http.Handler {
-	return httprate.Limit(
-		config.ChunkDownloadLimit,
-		config.TimeWindow,
-		httprate.WithKeyFuncs(httprate.KeyByIP),
-		httprate.WithLimitHandler(rateLimitExceededHandler(config.TimeWindow)),
-	)
+	return createLimiter(config.ChunkDownloadLimit)
 }
 
 func DownloadCompleteLimiter() func(http.Handler) http.Handler {
+	return createLimiter(config.DownloadCompleteLimit)
+}
+
+func createLimiter(limit int) func(http.Handler) http.Handler {
 	return httprate.Limit(
-		config.DownloadCompleteLimit,
+		limit,
 		config.TimeWindow,
 		httprate.WithKeyFuncs(httprate.KeyByIP),
 		httprate.WithLimitHandler(rateLimitExceededHandler(config.TimeWindow)),

@@ -25,9 +25,6 @@ func cleanupTestFiles(t *testing.T, db *database.Database) {
 
 func TestGetFileMetadata_Integration_Success(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 
@@ -85,9 +82,6 @@ func TestGetFileMetadata_Integration_Success(t *testing.T) {
 
 func TestGetFileMetadata_Integration_FileNotFound(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 
@@ -104,9 +98,6 @@ func TestGetFileMetadata_Integration_FileNotFound(t *testing.T) {
 
 func TestGetFileMetadata_Integration_FileExpired(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 
@@ -160,9 +151,6 @@ func TestGetFileMetadata_Integration_FileExpired(t *testing.T) {
 
 func TestCompleteDownload_Integration_Success(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 
@@ -215,9 +203,6 @@ func TestCompleteDownload_Integration_Success(t *testing.T) {
 
 func TestCompleteDownload_Integration_FileNotFound(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 
@@ -235,9 +220,6 @@ func TestCompleteDownload_Integration_FileNotFound(t *testing.T) {
 
 func TestCompleteDownload_Integration_FileExpired(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 
@@ -290,9 +272,6 @@ func TestCompleteDownload_Integration_FileExpired(t *testing.T) {
 
 func TestCompleteDownload_Integration_LimitReached(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 
@@ -348,9 +327,6 @@ func TestCompleteDownload_Integration_LimitReached(t *testing.T) {
 
 func TestCompleteDownload_Integration_NotReady(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 
@@ -389,9 +365,6 @@ func TestCompleteDownload_Integration_NotReady(t *testing.T) {
 
 func TestCompleteDownload_Integration_MultipleDownloads(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 	cleanupTestFiles(t, db)
 

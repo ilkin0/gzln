@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/ilkin0/gzln/internal/api/types"
 	"github.com/ilkin0/gzln/internal/database"
+	"github.com/ilkin0/gzln/internal/middleware"
 	"github.com/ilkin0/gzln/internal/repository/sqlc"
 	"github.com/ilkin0/gzln/internal/service"
 	"github.com/ilkin0/gzln/internal/testutil"
@@ -34,6 +35,8 @@ func setupRateLimitTest(t *testing.T) (chi.Router, *database.Database, func()) {
 	t.Setenv("RATE_LIMIT_CHUNK_DOWNLOAD", "6")
 	t.Setenv("RATE_LIMIT_DOWNLOAD_COMPLETE", "3")
 	t.Setenv("RATE_LIMIT_WINDOW_SECONDS", "2") // 2 second window for testing
+
+	middleware.ReloadConfig()
 
 	containers := testutil.SetupTestContainers(t)
 
@@ -59,7 +62,7 @@ func TestRateLimit_UploadInit(t *testing.T) {
 		reqBody := types.InitUploadRequest{
 			EncryptedFilename: "test.enc",
 			EncryptedMimeType: "application/octet-stream",
-			Salt:              fmt.Sprintf("salt-%d", time.Now().UnixNano()),
+			Salt:              fmt.Sprintf("salt%d", time.Now().UnixNano()%1000000),
 			Pbkdf2Iterations:  100000,
 			TotalSize:         1024,
 			ChunkCount:        1,
@@ -78,6 +81,7 @@ func TestRateLimit_UploadInit(t *testing.T) {
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code, "Request %d should succeed", i+1)
+		time.Sleep(10 * time.Millisecond) // Small delay to ensure requests are in the same window
 	}
 
 	req := createRequest()
@@ -158,7 +162,7 @@ func TestRateLimit_Metadata(t *testing.T) {
 	defer db.Pool.Exec(ctx, "TRUNCATE TABLE files CASCADE")
 
 	file, err := db.Queries.CreateFile(ctx, sqlc.CreateFileParams{
-		ShareID:           "metadata-test",
+		ShareID:           "meta-test-id",
 		EncryptedFilename: "test.enc",
 		EncryptedMimeType: "application/octet-stream",
 		Salt:              "test-salt",
@@ -207,7 +211,7 @@ func TestRateLimit_ChunkDownload(t *testing.T) {
 	defer db.Pool.Exec(ctx, "TRUNCATE TABLE files CASCADE")
 
 	file, err := db.Queries.CreateFile(ctx, sqlc.CreateFileParams{
-		ShareID:           "download-test",
+		ShareID:           "down-test-id",
 		EncryptedFilename: "test.enc",
 		EncryptedMimeType: "application/octet-stream",
 		Salt:              "test-salt",
@@ -268,7 +272,7 @@ func TestRateLimit_DifferentIPsNotAffected(t *testing.T) {
 		reqBody := types.InitUploadRequest{
 			EncryptedFilename: "test.enc",
 			EncryptedMimeType: "application/octet-stream",
-			Salt:              fmt.Sprintf("salt-%s-%d", ip, time.Now().UnixNano()),
+			Salt:              fmt.Sprintf("salt%d", time.Now().UnixNano()%1000000),
 			Pbkdf2Iterations:  100000,
 			TotalSize:         1024,
 			ChunkCount:        1,
@@ -310,7 +314,7 @@ func TestRateLimit_ResetAfterWindow(t *testing.T) {
 		reqBody := types.InitUploadRequest{
 			EncryptedFilename: "test.enc",
 			EncryptedMimeType: "application/octet-stream",
-			Salt:              fmt.Sprintf("salt-%d", time.Now().UnixNano()),
+			Salt:              fmt.Sprintf("salt%d", time.Now().UnixNano()%1000000), // Keep under 24 chars
 			Pbkdf2Iterations:  100000,
 			TotalSize:         1024,
 			ChunkCount:        1,

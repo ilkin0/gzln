@@ -45,6 +45,10 @@ func getEnvInt(key string, defaultValue int) int {
 
 var config = LoadRateLimitConfig()
 
+func ReloadConfig() {
+	config = LoadRateLimitConfig()
+}
+
 func UploadInitLimiter() func(http.Handler) http.Handler {
 	return createLimiter(config.UploadInitLimit)
 }
@@ -89,7 +93,6 @@ func rateLimitExceededHandler(retryAfter time.Duration) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
 		w.Header().Set("Retry-After", retryAfter.String())
-		w.Write([]byte(`{"success":false,"message":"Rate limit exceeded. Please
-  try again later."}`))
+		w.Write([]byte(`{"success":false,"message":"Rate limit exceeded. Please try again later."}`))
 	}
 }

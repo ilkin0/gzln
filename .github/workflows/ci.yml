@@ -9,21 +9,6 @@ jobs:
     name: Build & Test Backend
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: gzln_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,43 +25,13 @@ jobs:
           version: v2.6
           args: --timeout=5m
 
-      - name: Start MinIO
-        run: |
-          docker run -d \
-            --name minio \
-            -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio:latest server /data
-
-          # Wait for MinIO to be ready
-          for i in {1..15}; do
-            if curl -f http://localhost:9000/minio/health/live 2>/dev/null; then
-              echo "MinIO is ready"
-              break
-            fi
-            echo "Waiting for MinIO... ($i/30)"
-            sleep 2
-          done
+      - name: Install goose
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
 
       - name: Build server
         run: go build -v -o bin/server cmd/server/main.go
 
-      - name: Run migrations
-        env:
-          DB_URL: postgres://postgres:postgres@localhost:5432/gzln_test?sslmode=disable
-        run: |
-          go install github.com/pressly/goose/v3/cmd/goose@latest
-          goose -dir db/migration postgres "$DB_URL" up
-
-      - name: Run tests
-        env:
-          DB_URL: postgres://postgres:postgres@localhost:5432/gzln_test?sslmode=disable
-          MINIO_ENDPOINT: localhost:9000
-          MINIO_ACCESS_KEY: minioadmin
-          MINIO_SECRET_KEY: minioadmin
-          MINIO_BUCKET_NAME: gzln-test
-          MINIO_USE_SSL: false
+      - name: Run tests with testcontainers
         run: go test -v -race -coverprofile=coverage.out -p=1 ./...
 
       - name: Upload coverage

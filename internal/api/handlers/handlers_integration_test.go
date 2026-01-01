@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -16,52 +15,26 @@ import (
 	"github.com/ilkin0/gzln/internal/database"
 	"github.com/ilkin0/gzln/internal/repository/sqlc"
 	"github.com/ilkin0/gzln/internal/service"
-	"github.com/ilkin0/gzln/internal/storage"
+	"github.com/ilkin0/gzln/internal/testutil"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	_ = godotenv.Load("../../../.env")
-
-	code := m.Run()
-	os.Exit(code)
-}
-
 func setupTestHandler(t *testing.T) (*FileHandler, *database.Database, func()) {
-	ctx := context.Background()
+	t.Helper()
 
-	db, err := database.NewDatabase(ctx)
-	if err != nil {
-		t.Skipf("Skipping integration test: database not available: %v", err)
-		return nil, nil, func() {}
-	}
+	containers := testutil.SetupTestContainers(t)
 
-	minioClient, err := storage.NewMinIOClient()
-	if err != nil {
-		db.Pool.Close()
-		t.Skipf("Skipping integration test: MinIO not available: %v", err)
-		return nil, nil, func() {}
-	}
+	txRunner := database.NewTxRunner(containers.Database.Pool)
+	fileService := service.NewFileService(containers.Database.Queries, txRunner, containers.MinioClient.Client)
+	handler := NewFileHandler(fileService, containers.MinioClient.BucketName)
 
-	txRunner := database.NewTxRunner(db.Pool)
-	fileService := service.NewFileService(db.Queries, txRunner, minioClient.Client)
-	handler := NewFileHandler(fileService, minioClient.BucketName)
-
-	cleanup := func() {
-		db.Pool.Close()
-	}
-
-	return handler, db, cleanup
+	return handler, containers.Database, containers.Cleanup
 }
 
 func TestInitUpload_Integration_Success(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	req := types.InitUploadRequest{
@@ -111,9 +84,6 @@ func TestInitUpload_Integration_Success(t *testing.T) {
 
 func TestInitUpload_Integration_InvalidJSON(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	invalidJSON := []byte(`{"invalid": json}`)
@@ -130,9 +100,6 @@ func TestInitUpload_Integration_InvalidJSON(t *testing.T) {
 
 func TestInitUpload_Integration_MissingRequiredFields(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	tests := []struct {
@@ -198,9 +165,6 @@ func TestInitUpload_Integration_MissingRequiredFields(t *testing.T) {
 
 func TestInitUpload_Integration_IPExtraction(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	req := types.InitUploadRequest{
@@ -260,9 +224,6 @@ func TestInitUpload_Integration_IPExtraction(t *testing.T) {
 
 func TestInitUpload_Integration_DefaultValues(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	req := types.InitUploadRequest{
@@ -303,9 +264,6 @@ func TestInitUpload_Integration_DefaultValues(t *testing.T) {
 
 func TestFinalizeUpload_Integration_Success(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	initReq := types.InitUploadRequest{
@@ -380,9 +338,6 @@ func TestFinalizeUpload_Integration_Success(t *testing.T) {
 
 func TestFinalizeUpload_Integration_InvalidFileID(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	httpReq := httptest.NewRequest("POST", "/invalid-uuid/finalize", nil)
@@ -399,9 +354,6 @@ func TestFinalizeUpload_Integration_InvalidFileID(t *testing.T) {
 
 func TestFinalizeUpload_Integration_FileNotFound(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	nonExistentFileID := "550e8400-e29b-41d4-a716-446655440000"
@@ -420,9 +372,6 @@ func TestFinalizeUpload_Integration_FileNotFound(t *testing.T) {
 
 func TestFinalizeUpload_Integration_ChunkCountMismatch(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	initReq := types.InitUploadRequest{

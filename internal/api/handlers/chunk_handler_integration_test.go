@@ -13,37 +13,22 @@ import (
 	"github.com/ilkin0/gzln/internal/api/types"
 	"github.com/ilkin0/gzln/internal/database"
 	"github.com/ilkin0/gzln/internal/service"
-	"github.com/ilkin0/gzln/internal/storage"
+	"github.com/ilkin0/gzln/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func setupTestChunkHandler(t *testing.T) (*ChunkHandler, *service.FileService, func()) {
-	ctx := context.Background()
+	t.Helper()
 
-	db, err := database.NewDatabase(ctx)
-	if err != nil {
-		t.Skipf("Skipping integration test: database not available: %v", err)
-		return nil, nil, func() {}
-	}
+	containers := testutil.SetupTestContainers(t)
 
-	minioClient, err := storage.NewMinIOClient()
-	if err != nil {
-		db.Pool.Close()
-		t.Skipf("Skipping integration test: MinIO not available: %v", err)
-		return nil, nil, func() {}
-	}
+	chunkService := service.NewChunkService(containers.Database.Queries, containers.MinioClient.Client, containers.MinioClient.BucketName)
+	txRunner := database.NewTxRunner(containers.Database.Pool)
+	fileService := service.NewFileService(containers.Database.Queries, txRunner, containers.MinioClient.Client)
+	handler := NewChunkHandler(chunkService, containers.MinioClient.BucketName)
 
-	chunkService := service.NewChunkService(db.Queries, minioClient.Client, minioClient.BucketName)
-	txRunner := database.NewTxRunner(db.Pool)
-	fileService := service.NewFileService(db.Queries, txRunner, minioClient.Client)
-	handler := NewChunkHandler(chunkService, minioClient.BucketName)
-
-	cleanup := func() {
-		db.Pool.Close()
-	}
-
-	return handler, fileService, cleanup
+	return handler, fileService, containers.Cleanup
 }
 
 func createTestFile(t *testing.T, fileService *service.FileService) (string, string) {
@@ -68,9 +53,6 @@ func createTestFile(t *testing.T, fileService *service.FileService) (string, str
 
 func TestHandleChunkUpload_Integration_MissingAuthorization(t *testing.T) {
 	handler, _, cleanup := setupTestChunkHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	httpReq := httptest.NewRequest("POST", "/upload/chunk/550e8400-e29b-41d4-a716-446655440000", nil)
@@ -85,9 +67,6 @@ func TestHandleChunkUpload_Integration_MissingAuthorization(t *testing.T) {
 
 func TestHandleChunkUpload_Integration_InvalidFileID(t *testing.T) {
 	handler, _, cleanup := setupTestChunkHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	body := &bytes.Buffer{}
@@ -123,9 +102,6 @@ func TestHandleChunkUpload_Integration_InvalidFileID(t *testing.T) {
 
 func TestHandleChunkUpload_Integration_MissingChunkFile(t *testing.T) {
 	handler, fileService, cleanup := setupTestChunkHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	fileID, _ := createTestFile(t, fileService)
@@ -158,9 +134,6 @@ func TestHandleChunkUpload_Integration_MissingChunkFile(t *testing.T) {
 
 func TestHandleChunkUpload_Integration_InvalidChunkIndex(t *testing.T) {
 	handler, fileService, cleanup := setupTestChunkHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	fileID, _ := createTestFile(t, fileService)
@@ -198,9 +171,6 @@ func TestHandleChunkUpload_Integration_InvalidChunkIndex(t *testing.T) {
 
 func TestHandleChunkUpload_Integration_Success(t *testing.T) {
 	handler, fileService, cleanup := setupTestChunkHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	fileID, token := createTestFile(t, fileService)
@@ -239,9 +209,6 @@ func TestHandleChunkUpload_Integration_Success(t *testing.T) {
 
 func TestHandleChunkUpload_Integration_HashMismatch(t *testing.T) {
 	handler, fileService, cleanup := setupTestChunkHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	fileID, token := createTestFile(t, fileService)
@@ -279,9 +246,6 @@ func TestHandleChunkUpload_Integration_HashMismatch(t *testing.T) {
 
 func TestHandleChunkUpload_Integration_ChunkAlreadyExists(t *testing.T) {
 	handler, fileService, cleanup := setupTestChunkHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	fileID, token := createTestFile(t, fileService)
@@ -347,9 +311,6 @@ func TestHandleChunkUpload_Integration_ChunkAlreadyExists(t *testing.T) {
 
 func TestHandleChunkUpload_Integration_FileNotFound(t *testing.T) {
 	handler, _, cleanup := setupTestChunkHandler(t)
-	if handler == nil {
-		return
-	}
 	defer cleanup()
 
 	fileID := "550e8400-e29b-41d4-a716-446655440000"

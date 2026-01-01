@@ -12,78 +12,47 @@ import (
 	"github.com/ilkin0/gzln/internal/api/types"
 	"github.com/ilkin0/gzln/internal/crypto"
 	"github.com/ilkin0/gzln/internal/repository/sqlc"
+	"github.com/ilkin0/gzln/internal/testutil"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	minioc "github.com/testcontainers/testcontainers-go/modules/minio"
 )
 
-const testBucketName = "test-uploads"
-
-// testEnvironment holds both PostgreSQL and MinIO containers
-type testEnvironment struct {
-	dbContainer    *testDBContainer
-	minioContainer *minioc.MinioContainer
-	minioClient    *minio.Client
-	chunkService   *ChunkService
+type testEnv struct {
+	chunkService *ChunkService
+	queries      *sqlc.Queries
+	minioClient  *minio.Client
+	bucketName   string
+	pool         interface {
+		Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	}
 }
 
-func setupTestEnvironment(t *testing.T) (*testEnvironment, func()) {
-	ctx := context.Background()
+func setupTestChunkService(t *testing.T) (*testEnv, func()) {
+	t.Helper()
 
-	dbContainer, dbCleanup := setupTestDB(t)
+	containers := testutil.SetupTestContainers(t)
 
-	minioContainer, err := minioc.Run(ctx, "minio/minio:RELEASE.2024-01-16T16-07-38Z")
-	require.NoError(t, err, "Failed to start MinIO container")
+	chunkService := NewChunkService(containers.Database.Queries, containers.MinioClient.Client, containers.MinioClient.BucketName)
 
-	endpoint, err := minioContainer.ConnectionString(ctx)
-	require.NoError(t, err)
-
-	minioClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4("minioadmin", "minioadmin", ""),
-		Secure: false,
-	})
-	require.NoError(t, err)
-
-	err = minioClient.MakeBucket(ctx, testBucketName, minio.MakeBucketOptions{})
-	require.NoError(t, err)
-
-	chunkService := NewChunkService(dbContainer.queries, minioClient, testBucketName)
-
-	cleanup := func() {
-		objectsCh := minioClient.ListObjects(ctx, testBucketName, minio.ListObjectsOptions{Recursive: true})
-		for object := range objectsCh {
-			if object.Err != nil {
-				continue
-			}
-			_ = minioClient.RemoveObject(ctx, testBucketName, object.Key, minio.RemoveObjectOptions{})
-		}
-
-		_ = minioClient.RemoveBucket(ctx, testBucketName)
-
-		dbCleanup()
-		if err := minioContainer.Terminate(ctx); err != nil {
-			t.Logf("Failed to terminate MinIO container: %s", err)
-		}
-	}
-
-	return &testEnvironment{
-		dbContainer:    dbContainer,
-		minioContainer: minioContainer,
-		minioClient:    minioClient,
-		chunkService:   chunkService,
-	}, cleanup
+	return &testEnv{
+		chunkService: chunkService,
+		queries:      containers.Database.Queries,
+		minioClient:  containers.MinioClient.Client,
+		bucketName:   containers.MinioClient.BucketName,
+		pool:         containers.Database.Pool,
+	}, containers.Cleanup
 }
 
 func TestProcessChunkUpload_Integration_Success(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
 
-	file := createTestFileForUpload(t, env.dbContainer.queries, ctx)
+	file := createTestFileForUpload(t, env.queries, ctx)
 
 	chunkData := []byte("This is test chunk data for upload")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -103,7 +72,7 @@ func TestProcessChunkUpload_Integration_Success(t *testing.T) {
 	assert.Equal(t, "uploaded", resp.Status)
 	assert.Equal(t, expectedHash, resp.ReceivedHash)
 
-	exists, err := env.dbContainer.queries.ChunkExistsByFileIdAndIndex(ctx, sqlc.ChunkExistsByFileIdAndIndexParams{
+	exists, err := env.queries.ChunkExistsByFileIdAndIndex(ctx, sqlc.ChunkExistsByFileIdAndIndexParams{
 		FileID:     file.ID,
 		ChunkIndex: 0,
 	})
@@ -111,7 +80,7 @@ func TestProcessChunkUpload_Integration_Success(t *testing.T) {
 	assert.True(t, exists, "Chunk should exist in database")
 
 	objectName := fmt.Sprintf("%s/0.enc", file.ID)
-	object, err := env.minioClient.GetObject(ctx, testBucketName, objectName, minio.GetObjectOptions{})
+	object, err := env.minioClient.GetObject(ctx, env.bucketName, objectName, minio.GetObjectOptions{})
 	require.NoError(t, err)
 	defer object.Close()
 
@@ -121,11 +90,11 @@ func TestProcessChunkUpload_Integration_Success(t *testing.T) {
 }
 
 func TestProcessChunkUpload_Integration_HashMismatch(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	file := createTestFileForUpload(t, env.dbContainer.queries, ctx)
+	file := createTestFileForUpload(t, env.queries, ctx)
 
 	chunkData := []byte("Test data")
 	wrongHash := "wrong-hash-value"
@@ -145,11 +114,11 @@ func TestProcessChunkUpload_Integration_HashMismatch(t *testing.T) {
 }
 
 func TestProcessChunkUpload_Integration_DuplicateChunk(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	file := createTestFileForUpload(t, env.dbContainer.queries, ctx)
+	file := createTestFileForUpload(t, env.queries, ctx)
 
 	chunkData := []byte("Test data")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -172,13 +141,13 @@ func TestProcessChunkUpload_Integration_DuplicateChunk(t *testing.T) {
 }
 
 func TestProcessChunkUpload_Integration_InvalidFileStatus(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
 
 	// Create a file with "ready" status (not "uploading")
-	file := createTestFile(t, env.dbContainer.queries, ctx, 5, 4)
+	file := createTestFile(t, env.queries, ctx, 5, 4)
 
 	chunkData := []byte("Test data")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -198,12 +167,12 @@ func TestProcessChunkUpload_Integration_InvalidFileStatus(t *testing.T) {
 }
 
 func TestDownloadChunk_Integration_Success(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
 
-	file := createTestFileForUpload(t, env.dbContainer.queries, ctx)
+	file := createTestFileForUpload(t, env.queries, ctx)
 
 	chunkData := []byte("Test chunk data for download")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -219,7 +188,7 @@ func TestDownloadChunk_Integration_Success(t *testing.T) {
 	_, err := env.chunkService.ProcessChunkUpload(ctx, uploadReq)
 	require.NoError(t, err)
 
-	file, err = env.dbContainer.queries.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
+	file, err = env.queries.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
 		ID:     file.ID,
 		Status: "ready",
 	})
@@ -235,11 +204,11 @@ func TestDownloadChunk_Integration_Success(t *testing.T) {
 }
 
 func TestDownloadChunk_Integration_ChunkNotFound(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	file := createTestFile(t, env.dbContainer.queries, ctx, 5, 4)
+	file := createTestFile(t, env.queries, ctx, 5, 4)
 
 	_, err := env.chunkService.DownloadChunk(ctx, file.ShareID, 99)
 	require.Error(t, err)
@@ -247,12 +216,12 @@ func TestDownloadChunk_Integration_ChunkNotFound(t *testing.T) {
 }
 
 func TestDownloadChunk_Integration_LimitReached(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
 
-	file := createTestFileForUpload(t, env.dbContainer.queries, ctx)
+	file := createTestFileForUpload(t, env.queries, ctx)
 
 	chunkData := []byte("Test data")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -267,7 +236,7 @@ func TestDownloadChunk_Integration_LimitReached(t *testing.T) {
 	_, err := env.chunkService.ProcessChunkUpload(ctx, uploadReq)
 	require.NoError(t, err)
 
-	_, err = env.dbContainer.pool.Exec(ctx, `
+	_, err = env.pool.Exec(ctx, `
 		UPDATE files SET max_downloads = 1, download_count = 1, status = 'ready'
 		WHERE id = $1
 	`, file.ID)
@@ -279,12 +248,12 @@ func TestDownloadChunk_Integration_LimitReached(t *testing.T) {
 }
 
 func TestCompleteUploadDownloadFlow_Integration(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
 
-	file := createTestFileForUpload(t, env.dbContainer.queries, ctx)
+	file := createTestFileForUpload(t, env.queries, ctx)
 
 	chunks := [][]byte{
 		[]byte("Chunk 0 data - first part"),
@@ -309,7 +278,7 @@ func TestCompleteUploadDownloadFlow_Integration(t *testing.T) {
 		assert.Equal(t, int64(i), resp.ChunkIndex)
 	}
 
-	_, err := env.dbContainer.queries.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
+	_, err := env.queries.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
 		ID:     file.ID,
 		Status: "ready",
 	})
@@ -327,11 +296,11 @@ func TestCompleteUploadDownloadFlow_Integration(t *testing.T) {
 }
 
 func TestMinIOStorageIntegrity_Integration(t *testing.T) {
-	env, cleanup := setupTestEnvironment(t)
+	env, cleanup := setupTestChunkService(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	file := createTestFileForUpload(t, env.dbContainer.queries, ctx)
+	file := createTestFileForUpload(t, env.queries, ctx)
 
 	chunkData := bytes.Repeat([]byte("X"), 1024*1024)
 	expectedHash := crypto.HashBytes(chunkData)
@@ -349,13 +318,13 @@ func TestMinIOStorageIntegrity_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	objectName := fmt.Sprintf("%s/0.enc", file.ID)
-	stat, err := env.minioClient.StatObject(ctx, testBucketName, objectName, minio.StatObjectOptions{})
+	stat, err := env.minioClient.StatObject(ctx, env.bucketName, objectName, minio.StatObjectOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, int64(len(chunkData)), stat.Size)
 
 	assert.Equal(t, "large-chunk.bin", stat.UserMetadata["Original-Filename"])
 
-	object, err := env.minioClient.GetObject(ctx, testBucketName, objectName, minio.GetObjectOptions{})
+	object, err := env.minioClient.GetObject(ctx, env.bucketName, objectName, minio.GetObjectOptions{})
 	require.NoError(t, err)
 	defer object.Close()
 

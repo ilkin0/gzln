@@ -42,3 +42,10 @@
 # Documentation
 LICENSE
 README.md
+
+# Web
+web/
+node_modules/
+dist/
+build/
+*.log

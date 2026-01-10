@@ -1,0 +1,33 @@
+# Node modules (installed in container)
+node_modules
+.pnp
+.pnp.js
+
+# Build output (generated during docker build)
+build
+dist
+out
+
+# Local environment files
+.env
+.env.*.local
+*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Git
+.git
+.gitignore
+
+# Editor / OS files
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Optional: lock files not needed in build stage
+yarn.lock
+

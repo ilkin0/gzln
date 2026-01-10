@@ -157,8 +157,9 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const serverBuilt = '${{ needs.changes.outputs.server }}' === 'true' || '${{ github.event_name }}' === 'workflow_dispatch';
-            const webBuilt = '${{ needs.changes.outputs.web }}' === 'true' || '${{ github.event_name }}' === 'workflow_dispatch';
+            const isDispatch = '${{ github.event_name }}' === 'workflow_dispatch';
+            const serverBuilt = '${{ needs.changes.outputs.server }}' === 'true' || (isDispatch && '${{ inputs.build_server }}' === 'true');
+            const webBuilt = '${{ needs.changes.outputs.web }}' === 'true' || (isDispatch && '${{ inputs.build_web }}' === 'true');
             const serverSuccess = '${{ needs.build-server.result }}' === 'success';
             const webSuccess = '${{ needs.build-web.result }}' === 'success';
 

@@ -148,30 +148,3 @@ jobs:
           cache-to: type=gha,mode=max,scope=web
           build-args: |
             VITE_API_URL=${{ secrets.VITE_API_URL }}
-
-  trigger-deploy:
-    name: Trigger Deployment
-    runs-on: ubuntu-latest
-    needs: [changes, build-server, build-web]
-    if: always() && github.ref == 'refs/heads/master'
-    steps:
-      - name: Trigger deploy workflow
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const isDispatch = '${{ github.event_name }}' === 'workflow_dispatch';
-            const serverBuilt = '${{ needs.changes.outputs.server }}' === 'true' || (isDispatch && '${{ inputs.build_server }}' === 'true');
-            const webBuilt = '${{ needs.changes.outputs.web }}' === 'true' || (isDispatch && '${{ inputs.build_web }}' === 'true');
-            const serverSuccess = '${{ needs.build-server.result }}' === 'success';
-            const webSuccess = '${{ needs.build-web.result }}' === 'success';
-
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'deploy.yml',
-              ref: 'master',
-              inputs: {
-                deploy_server: String(serverBuilt && serverSuccess),
-                deploy_web: String(webBuilt && webSuccess)
-              }
-            });

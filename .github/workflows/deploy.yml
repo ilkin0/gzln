@@ -1,52 +1,18 @@
 name: Deploy
 
 on:
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
+    branches: [master]
   workflow_dispatch:
-    inputs:
-      deploy_server:
-        description: 'Deploy Server'
-        required: false
-        type: string
-        default: 'true'
-      deploy_web:
-        description: 'Deploy Web'
-        required: false
-        type: string
-        default: 'true'
 
 jobs:
-  deploy-server:
-    name: Deploy Server
-    runs-on: ubuntu-latest
-    if: inputs.deploy_server == 'true'
-
-    steps:
-      - name: Deploy Server to Dokploy
-        run: |
-          echo "Deploying Server..."
-          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.DOKPLOY_API_URL }}/api/application.deploy" \
-            -H "accept: application/json" \
-            -H "Content-Type: application/json" \
-            -H "x-api-key: ${{ secrets.DOKPLOY_API_TOKEN }}" \
-            -d '{"applicationId": "${{ secrets.DOKPLOY_SERVER_APP_ID }}"}')
-
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | head -n-1)
-
-          echo "Response: $body"
-          echo "HTTP Code: $http_code"
-
-          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
-            echo "::error::Deployment failed with HTTP $http_code"
-            exit 1
-          fi
-
-          echo "::notice::Server deployment triggered successfully"
-
   deploy-web:
     name: Deploy Web
     runs-on: ubuntu-latest
-    if: inputs.deploy_web == 'true'
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Deploy Web to Dokploy

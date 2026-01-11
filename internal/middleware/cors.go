@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"slices"
@@ -9,11 +10,21 @@ import (
 
 func CORS(next http.Handler) http.Handler {
 	allowedOrigins := getAllowedOrigins()
+	slog.Info("CORS middleware initialized",
+		slog.Any("allowed_origins", allowedOrigins),
+	)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
 		isAllowed := slices.Contains(allowedOrigins, origin)
+
+		if !isAllowed && origin != "" {
+			slog.Warn("CORS origin not allowed",
+				slog.String("origin", origin),
+				slog.Any("allowed", allowedOrigins),
+			)
+		}
 
 		if isAllowed {
 			w.Header().Set("Access-Control-Allow-Origin", origin)

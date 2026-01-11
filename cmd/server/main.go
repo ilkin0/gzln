@@ -25,7 +25,7 @@ func main() {
 	ctx := context.Background()
 
 	slog.Info("starting gzln file sharing service",
-		slog.String("version", "1.0.0"),
+		slog.String("version", "1.0.1"),
 	)
 
 	// Initialize Database

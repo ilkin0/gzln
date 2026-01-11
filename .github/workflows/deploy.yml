@@ -1,12 +1,18 @@
 name: Deploy
 
 on:
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
+    branches: [master]
   workflow_dispatch:
 
 jobs:
   deploy-web:
     name: Deploy Web
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Deploy Web to Dokploy

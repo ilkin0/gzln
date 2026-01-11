@@ -24,9 +24,10 @@ jobs:
       - name: Deploy Server to Dokploy
         run: |
           echo "Deploying Server..."
-          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.DOKPLOY_API_URL }}/api/application.redeploy" \
-            -H "Authorization: Bearer ${{ secrets.DOKPLOY_API_TOKEN }}" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.DOKPLOY_API_URL }}/api/application.deploy" \
+            -H "accept: application/json" \
             -H "Content-Type: application/json" \
+            -H "x-api-key: ${{ secrets.DOKPLOY_API_TOKEN }}" \
             -d '{"applicationId": "${{ secrets.DOKPLOY_SERVER_APP_ID }}"}')
 
           http_code=$(echo "$response" | tail -n1)
@@ -51,9 +52,10 @@ jobs:
       - name: Deploy Web to Dokploy
         run: |
           echo "Deploying Web..."
-          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.DOKPLOY_API_URL }}/api/application.redeploy" \
-            -H "Authorization: Bearer ${{ secrets.DOKPLOY_API_TOKEN }}" \
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.DOKPLOY_API_URL }}/api/application.deploy" \
+            -H "accept: application/json" \
             -H "Content-Type: application/json" \
+            -H "x-api-key: ${{ secrets.DOKPLOY_API_TOKEN }}" \
             -d '{"applicationId": "${{ secrets.DOKPLOY_WEB_APP_ID }}"}')
 
           http_code=$(echo "$response" | tail -n1)

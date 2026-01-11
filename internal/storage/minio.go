@@ -29,7 +29,7 @@ func NewMinIOClient() (*MinIOClient, error) {
 	})
 
 	if error != nil {
-		return nil, fmt.Errorf("failed to craete minio client: %w", error)
+		return nil, fmt.Errorf("failed to creat minio client: %w", error)
 	}
 
 	ctx := context.Background()

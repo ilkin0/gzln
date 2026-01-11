@@ -1,4 +1,3 @@
-# https://github.com/docker/awesome-compose
 services:
   server:
     build:
@@ -7,14 +6,30 @@ services:
     ports:
       - "${SERVER_PORT:-8080}:8080"
     environment:
-      - DB_HOST=${DB_HOST:-db}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - SERVER_PORT=${SERVER_PORT:-8080}
+      # Database
+      - DB_URL=${DB_URL}
+      # MinIO - internal connection
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_USE_SSL=false
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-gzln-uploads}
+      # App
+      - APP_ENV=${APP_ENV:-development}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      # Rate Limiting
+      - RATE_LIMIT_UPLOAD_INIT=${RATE_LIMIT_UPLOAD_INIT:-10}
+      - RATE_LIMIT_CHUNK_UPLOAD=${RATE_LIMIT_CHUNK_UPLOAD:-60}
+      - RATE_LIMIT_UPLOAD_FINALIZE=${RATE_LIMIT_UPLOAD_FINALIZE:-20}
+      - RATE_LIMIT_METADATA=${RATE_LIMIT_METADATA:-30}
+      - RATE_LIMIT_CHUNK_DOWNLOAD=${RATE_LIMIT_CHUNK_DOWNLOAD:-110}
+      - RATE_LIMIT_DOWNLOAD_COMPLETE=${RATE_LIMIT_DOWNLOAD_COMPLETE:-20}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
     depends_on:
       db:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - gzln-network
@@ -59,6 +74,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - gzln-network
+
+  web:
+    build:
+      context: ./web
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
+    container_name: ${WEB_CONTAINER_NAME:-gzln_web}
+    restart: always
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      - server
     networks:
       - gzln-network
 

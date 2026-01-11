@@ -19,14 +19,8 @@ import (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		slog.SetDefault(logger.Init())
-		slog.Warn("no .env file found or unable to load it",
-			slog.String("error", err.Error()),
-		)
-	} else {
-		slog.SetDefault(logger.Init())
-	}
+	_ = godotenv.Load()
+	slog.SetDefault(logger.Init())
 
 	ctx := context.Background()
 

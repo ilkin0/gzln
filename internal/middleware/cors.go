@@ -2,18 +2,16 @@ package middleware
 
 import (
 	"net/http"
+	"os"
 	"slices"
+	"strings"
 )
 
 func CORS(next http.Handler) http.Handler {
+	allowedOrigins := getAllowedOrigins()
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-
-		allowedOrigins := []string{
-			"http://localhost:5173",
-			"http://localhost:4173",
-			"http://localhost:3000",
-		}
 
 		isAllowed := slices.Contains(allowedOrigins, origin)
 
@@ -36,4 +34,24 @@ func CORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func getAllowedOrigins() []string {
+	defaults := []string{
+		"http://localhost:5173",
+		"http://localhost:4173",
+		"http://localhost:3000",
+	}
+
+	env := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if env == "" {
+		return defaults
+	}
+
+	origins := strings.Split(env, ",")
+	for i := range origins {
+		origins[i] = strings.TrimSpace(origins[i])
+	}
+
+	return append(defaults, origins...)
 }

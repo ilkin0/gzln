@@ -146,6 +146,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
 
   trigger-deploy:
     name: Trigger Deployment

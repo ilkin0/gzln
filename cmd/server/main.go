@@ -69,6 +69,13 @@ func main() {
 	r.Use(logger.RequestID)
 	r.Use(middleware.Recoverer)
 
+	// Health check endpoint
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+
 	// Mount routes
 	r.Mount("/api/v1/files", routes.FileRoutes(fileService, chunkService, minioClient.BucketName))
 	r.Mount("/api/v1/download", routes.DownloadRoutes(fileService, chunkService, minioClient.BucketName))

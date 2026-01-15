@@ -1,4 +1,15 @@
 services:
+  migrate:
+    image: ghcr.io/pressly/goose/v3:3.24.2
+    command: ["-dir", "/migrations", "postgres", "${DB_URL}", "up"]
+    volumes:
+      - ./db/migration:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gzln-network
+
   server:
     build:
       context: .
@@ -35,6 +46,7 @@ services:
         condition: service_completed_successfully
     networks:
       - gzln-network
+    restart: unless-stopped
 
   db:
     image: postgres:18-alpine
@@ -54,17 +66,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - gzln-network
-
-  migrate:
-    image: ghcr.io/pressly/goose/v3:3.24.2
-    command: ["-dir", "/migrations", "postgres", "${DB_URL}", "up"]
-    volumes:
-      - ./db/migration:/migrations:ro
-    depends_on:
-      db:
-        condition: service_healthy
     networks:
       - gzln-network
 

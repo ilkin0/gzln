@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"slices"
@@ -9,23 +10,28 @@ import (
 
 func CORS(next http.Handler) http.Handler {
 	allowedOrigins := getAllowedOrigins()
+	slog.Info("CORS middleware initialized", slog.Any("allowed_origins", allowedOrigins))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		isAllowed := slices.Contains(allowedOrigins, origin)
+		if origin != "" {
+			isAllowed := slices.Contains(allowedOrigins, origin)
 
-		if isAllowed {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
+			slog.Info("CORS check",
+				slog.String("origin", origin),
+				slog.Bool("allowed", isAllowed),
+				slog.String("method", r.Method),
+			)
+
+			if isAllowed {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+				w.Header().Set("Access-Control-Max-Age", "86400")
+			}
 		}
-
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-
-		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)

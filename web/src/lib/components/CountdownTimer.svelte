@@ -47,7 +47,7 @@
 
 <div class="border-2 rounded-lg p-4 {bgColor}">
   <div class="flex items-center gap-3">
-    <svg class="w-5 h-5 {textColor}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg class="w-5 h-5 flex-shrink-0 {textColor}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         stroke-linecap="round"
         stroke-linejoin="round"
@@ -55,13 +55,9 @@
         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
       />
     </svg>
-    <div>
-      <div class="text-sm font-medium {textColor}">
-        {timeRemaining.total <= 0 ? "Expired" : "Expires in"}
-      </div>
-      <div class="text-lg font-bold {textColor}">
-        {formatTimeRemaining(timeRemaining)}
-      </div>
-    </div>
+    <p class="text-sm {textColor}">
+      <span class="font-medium">{timeRemaining.total <= 0 ? "Expired" : "Expires in"}</span>
+      <span class="font-bold text-base ml-1">{formatTimeRemaining(timeRemaining)}</span>
+    </p>
   </div>
 </div>

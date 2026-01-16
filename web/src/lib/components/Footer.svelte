@@ -7,7 +7,7 @@
 <footer class="bg-white mt-auto">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
     <div class="flex flex-row items-center justify-center space-x-2">
-      <span>Created by </span>
+      <span>Created with ❤️ by </span>
       <a
         href={authorUrl}
         target="_blank"

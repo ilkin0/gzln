@@ -3,4 +3,4 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://gzln.io/sitemap.xml
+Sitemap: https://gzln.dev/sitemap.xml

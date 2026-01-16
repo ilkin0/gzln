@@ -1,6 +1,6 @@
 <script lang="ts">
   import {filesApi} from "$lib/api/files";
-  import {CHUNK_SIZE, MAX_FILE_SIZE} from "$lib/config";
+  import {CHUNK_SIZE, MAX_FILE_SIZE, DEFAULT_EXPIRES_HOURS, DEFAULT_MAX_DOWNLOADS} from "$lib/config";
   import type {InitUploadRequest} from "$lib/types/api";
   import {deriveKey, encryptString, generateSalt, PBKDF2_ITERATIONS,} from "../../crypto/encrypt";
   import {arrayBufferToBase64} from "../../crypto/utils";
@@ -44,7 +44,7 @@
     const file = files[0];
 
     if (file.size > MAX_FILE_SIZE) {
-      error = `File size exceeds ${MAX_FILE_SIZE / (1024 * 1024 * 1024)}GB limit`;
+      error = `File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`;
       return;
     }
 
@@ -70,6 +70,8 @@
         chunk_count: requestCount,
         chunk_size: chunkSize,
         pbkdf2_iterations: PBKDF2_ITERATIONS,
+        expires_in_hours: DEFAULT_EXPIRES_HOURS,
+        max_downloads: DEFAULT_MAX_DOWNLOADS,
       };
 
       const initResponse = await filesApi.initUpload(request);
@@ -325,7 +327,7 @@
                   Click to select a file
                 </p>
                 <p class="text-sm text-gray-500">or drag and drop</p>
-                <p class="text-xs text-gray-400 mt-2">Max file size: 5 GB</p>
+                <p class="text-xs text-gray-400 mt-2">Max file size: {MAX_FILE_SIZE / (1024 * 1024)} MB</p>
               {/if}
             </div>
             <input type="file" bind:files class="hidden" />
@@ -338,13 +340,13 @@
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            <span>5 downloads</span>
+            <span>{DEFAULT_MAX_DOWNLOADS} downloads</span>
           </div>
           <div class="flex items-center gap-1.5">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>Expires in 72 hours</span>
+            <span>Expires in {DEFAULT_EXPIRES_HOURS} hours</span>
           </div>
         </div>
       {:else}

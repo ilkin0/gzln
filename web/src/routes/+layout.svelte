@@ -8,7 +8,7 @@
 
 	const siteTitle = 'GZLN - Simple & Secure File Sharing';
 	const siteDescription = 'Fast, secure, and easy file sharing. Upload and share files instantly with GZLN.';
-	const siteUrl = 'https://gzln.io';
+	const siteUrl = 'https://gzln.dev';
 	const siteImage = '/og-image.png';
 </script>
 
@@ -20,9 +20,10 @@
 	<meta name="keywords" content="file sharing, file upload, secure file transfer, share files online" />
 	<meta name="author" content="GZLN" />
 
-	<!-- Favicon -->
+	<!-- Favicon & PWA -->
 	<link rel="icon" href={favicon} />
 	<link rel="apple-touch-icon" href={favicon} />
+	<link rel="manifest" href="/manifest.json" />
 
 	<!-- Open Graph / Facebook -->
 	<meta property="og:type" content="website" />

@@ -23,7 +23,7 @@
 				</div>
 				<p class="text-gray-700 leading-relaxed">
 					GZLN is built to make file sharing simple, fast, and secure. No complicated sign-ups,
-					no hidden fees, just straightforward file sharing that works. We believe file sharing
+					no hidden fees, just straightforward file sharing that works. File sharing
 					should be accessible to everyone.
 				</p>
 			</div>
@@ -64,6 +64,29 @@
 				</ul>
 			</div>
 
+			<!-- Privacy First -->
+			<div class="bg-white rounded-2xl shadow-lg p-8">
+				<div class="flex items-center mb-4">
+					<svg class="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+					</svg>
+					<h2 class="text-2xl font-bold text-gray-900">Privacy First</h2>
+				</div>
+				<p class="text-gray-700 leading-relaxed mb-4">
+					Your files are encrypted in your browser before they ever leave your device.
+					We use <strong>AES-256-GCM</strong> encryption with keys derived via <strong>PBKDF2-SHA256</strong>.
+				</p>
+				<div class="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
+					<p class="font-medium text-gray-800 mb-2">How it works:</p>
+					<ol class="list-decimal list-inside space-y-1">
+						<li>A random encryption key is generated in your browser</li>
+						<li>Your file is encrypted locally before upload</li>
+						<li>The key stays in the URL fragment — never sent to our server</li>
+						<li>Only you and whoever you share the link with can decrypt the file</li>
+					</ol>
+				</div>
+			</div>
+
 			<!-- Open Source -->
 			<div class="bg-white rounded-2xl shadow-lg p-8">
 				<div class="flex items-center mb-4">
@@ -74,7 +97,7 @@
 				</div>
 				<p class="text-gray-700 leading-relaxed mb-4">
 					GZLN is completely open source. The code is available on GitHub for anyone to review,
-					contribute to, or learn from. We believe in transparency and community-driven development.
+					contribute to, or learn from. <br>I believe in transparency and community-driven development.
 				</p>
 				<a
 					href="https://github.com/ilkin0/gzln"
@@ -87,42 +110,6 @@
 					</svg>
 					<span>View on GitHub</span>
 				</a>
-			</div>
-
-			<!-- Tech Stack -->
-			<div class="bg-white rounded-2xl shadow-lg p-8">
-				<div class="flex items-center mb-4">
-					<svg class="w-8 h-8 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-					</svg>
-					<h2 class="text-2xl font-bold text-gray-900">Built With</h2>
-				</div>
-				<div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-					<div class="text-center p-4 bg-gray-50 rounded-lg">
-						<p class="font-semibold text-gray-900">Go</p>
-						<p class="text-sm text-gray-600">Backend</p>
-					</div>
-					<div class="text-center p-4 bg-gray-50 rounded-lg">
-						<p class="font-semibold text-gray-900">SvelteKit</p>
-						<p class="text-sm text-gray-600">Frontend</p>
-					</div>
-					<div class="text-center p-4 bg-gray-50 rounded-lg">
-						<p class="font-semibold text-gray-900">MinIO</p>
-						<p class="text-sm text-gray-600">Storage</p>
-					</div>
-					<div class="text-center p-4 bg-gray-50 rounded-lg">
-						<p class="font-semibold text-gray-900">PostgreSQL</p>
-						<p class="text-sm text-gray-600">Database</p>
-					</div>
-					<div class="text-center p-4 bg-gray-50 rounded-lg">
-						<p class="font-semibold text-gray-900">Tailwind CSS</p>
-						<p class="text-sm text-gray-600">Styling</p>
-					</div>
-					<div class="text-center p-4 bg-gray-50 rounded-lg">
-						<p class="font-semibold text-gray-900">Docker</p>
-						<p class="text-sm text-gray-600">Deployment</p>
-					</div>
-				</div>
 			</div>
 		</div>
 	</div>

@@ -15,6 +15,7 @@
 <svelte:head>
   <title>Download File - GZLN</title>
   <meta name="description" content="Download your encrypted file securely" />
+  <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
 <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">

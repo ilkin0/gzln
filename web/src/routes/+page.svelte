@@ -7,7 +7,7 @@
     name: "GZLN",
     description:
       "Zero-knowledge encrypted file sharing. Your files, your control.",
-    url: "https://gzln.io",
+    url: "https://gzln.dev",
     applicationCategory: "UtilityApplication",
     operatingSystem: "Any",
     offers: {

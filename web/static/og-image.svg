@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#2563eb"/>
+  <text x="600" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="120" font-weight="bold" fill="white" text-anchor="middle">GZLN</text>
+  <text x="600" y="380" font-family="system-ui, -apple-system, sans-serif" font-size="36" fill="rgba(255,255,255,0.9)" text-anchor="middle">Simple &amp; Secure File Sharing</text>
+  <text x="600" y="440" font-family="system-ui, -apple-system, sans-serif" font-size="24" fill="rgba(255,255,255,0.7)" text-anchor="middle">Upload. Share. Done.</text>
+</svg>

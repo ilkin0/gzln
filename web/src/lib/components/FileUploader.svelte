@@ -254,9 +254,9 @@
 
       <!-- Expiry Info -->
       <div class="bg-amber-50 rounded-lg p-4 mb-6 border border-amber-200">
-        <div class="flex items-start gap-3">
+        <div class="flex items-center gap-3">
           <svg
-            class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"
+            class="w-5 h-5 text-amber-600 flex-shrink-0"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -268,12 +268,10 @@
               d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <div>
-            <p class="text-sm font-medium text-amber-900">Link expires on</p>
-            <p class="text-sm text-amber-700 font-semibold">
-              {formatDate(initUploadResult.expires_at)}
-            </p>
-          </div>
+          <p class="text-sm text-amber-800">
+            <span class="font-medium">Link expires on</span>
+            <span class="font-semibold ml-1">{formatDate(initUploadResult.expires_at)}</span>
+          </p>
         </div>
       </div>
 
@@ -332,6 +330,22 @@
             </div>
             <input type="file" bind:files class="hidden" />
           </label>
+        </div>
+
+        <!-- Default Settings Info -->
+        <div class="mt-4 flex flex-wrap justify-center gap-4 text-sm text-gray-500">
+          <div class="flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>5 downloads</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Expires in 72 hours</span>
+          </div>
         </div>
       {:else}
         <!-- Uploading State -->

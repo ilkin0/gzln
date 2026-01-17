@@ -16,9 +16,10 @@ type Querier interface {
 	CountChunksByFileId(ctx context.Context, fileID pgtype.UUID) (int64, error)
 	CreateChunk(ctx context.Context, arg CreateChunkParams) (int64, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
-	DeleteExpiredFiles(ctx context.Context) error
+	ExpireFilesByIds(ctx context.Context, dollar_1 []pgtype.UUID) error
 	FileExistsByIdAndStatus(ctx context.Context, arg FileExistsByIdAndStatusParams) (bool, error)
 	GetChunkByIndexAndFileShareID(ctx context.Context, arg GetChunkByIndexAndFileShareIDParams) (GetChunkByIndexAndFileShareIDRow, error)
+	GetExpiredFiles(ctx context.Context) ([]GetExpiredFilesRow, error)
 	GetFileByID(ctx context.Context, id pgtype.UUID) (File, error)
 	GetFileByShareID(ctx context.Context, shareID string) (File, error)
 	GetFileMetadataByShareId(ctx context.Context, shareID string) (GetFileMetadataByShareIdRow, error)

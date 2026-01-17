@@ -5,16 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/netip"
 	"testing"
-	"time"
 
 	"github.com/ilkin0/gzln/internal/api/types"
 	"github.com/ilkin0/gzln/internal/crypto"
 	"github.com/ilkin0/gzln/internal/repository/sqlc"
 	"github.com/ilkin0/gzln/internal/testutil"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,7 +49,7 @@ func TestProcessChunkUpload_Integration_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	file := createTestFileForUpload(t, env.queries, ctx)
+	file := testutil.CreateUploadingFile(t, env.queries, ctx)
 
 	chunkData := []byte("This is test chunk data for upload")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -94,7 +91,7 @@ func TestProcessChunkUpload_Integration_HashMismatch(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	file := createTestFileForUpload(t, env.queries, ctx)
+	file := testutil.CreateUploadingFile(t, env.queries, ctx)
 
 	chunkData := []byte("Test data")
 	wrongHash := "wrong-hash-value"
@@ -118,7 +115,7 @@ func TestProcessChunkUpload_Integration_DuplicateChunk(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	file := createTestFileForUpload(t, env.queries, ctx)
+	file := testutil.CreateUploadingFile(t, env.queries, ctx)
 
 	chunkData := []byte("Test data")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -147,7 +144,7 @@ func TestProcessChunkUpload_Integration_InvalidFileStatus(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a file with "ready" status (not "uploading")
-	file := createTestFile(t, env.queries, ctx, 5, 4)
+	file := testutil.CreateReadyFile(t, env.queries, ctx)
 
 	chunkData := []byte("Test data")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -172,7 +169,7 @@ func TestDownloadChunk_Integration_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	file := createTestFileForUpload(t, env.queries, ctx)
+	file := testutil.CreateUploadingFile(t, env.queries, ctx)
 
 	chunkData := []byte("Test chunk data for download")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -208,7 +205,7 @@ func TestDownloadChunk_Integration_ChunkNotFound(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	file := createTestFile(t, env.queries, ctx, 5, 4)
+	file := testutil.CreateReadyFile(t, env.queries, ctx)
 
 	_, err := env.chunkService.DownloadChunk(ctx, file.ShareID, 99)
 	require.Error(t, err)
@@ -221,7 +218,7 @@ func TestDownloadChunk_Integration_LimitReached(t *testing.T) {
 
 	ctx := context.Background()
 
-	file := createTestFileForUpload(t, env.queries, ctx)
+	file := testutil.CreateUploadingFile(t, env.queries, ctx)
 
 	chunkData := []byte("Test data")
 	expectedHash := crypto.HashBytes(chunkData)
@@ -253,7 +250,7 @@ func TestCompleteUploadDownloadFlow_Integration(t *testing.T) {
 
 	ctx := context.Background()
 
-	file := createTestFileForUpload(t, env.queries, ctx)
+	file := testutil.CreateUploadingFile(t, env.queries, ctx)
 
 	chunks := [][]byte{
 		[]byte("Chunk 0 data - first part"),
@@ -300,7 +297,7 @@ func TestMinIOStorageIntegrity_Integration(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	file := createTestFileForUpload(t, env.queries, ctx)
+	file := testutil.CreateUploadingFile(t, env.queries, ctx)
 
 	chunkData := bytes.Repeat([]byte("X"), 1024*1024)
 	expectedHash := crypto.HashBytes(chunkData)
@@ -333,29 +330,3 @@ func TestMinIOStorageIntegrity_Integration(t *testing.T) {
 	assert.Equal(t, chunkData, downloadedData)
 }
 
-func createTestFileForUpload(t *testing.T, queries *sqlc.Queries, ctx context.Context) sqlc.File {
-	t.Helper()
-
-	shareID := generateShareID()
-
-	file, err := queries.CreateFile(ctx, sqlc.CreateFileParams{
-		ShareID:           shareID,
-		EncryptedFilename: "encrypted-test-upload",
-		EncryptedMimeType: "encrypted-mime",
-		Salt:              "test-salt",
-		Pbkdf2Iterations:  100000,
-		TotalSize:         1024 * 1024,
-		ChunkCount:        4,
-		ChunkSize:         256 * 1024,
-		ExpiresAt: pgtype.Timestamptz{
-			Time:  time.Now().Add(24 * time.Hour),
-			Valid: true,
-		},
-		MaxDownloads:      5,
-		DeletionTokenHash: pgtype.Text{String: "token-hash", Valid: true},
-		UploaderIp:        netip.MustParseAddr("192.168.1.1"),
-	})
-	require.NoError(t, err)
-
-	return file
-}

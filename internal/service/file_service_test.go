@@ -90,6 +90,16 @@ func (m *MockQuerier) Rollback(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *MockQuerier) GetExpiredFiles(ctx context.Context) ([]sqlc.GetExpiredFilesRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]sqlc.GetExpiredFilesRow), args.Error(1)
+}
+
+func (m *MockQuerier) ExpireFilesByIds(ctx context.Context, ids []pgtype.UUID) error {
+	args := m.Called(ctx, ids)
+	return args.Error(0)
+}
+
 func createValidRequest() types.InitUploadRequest {
 	// 1MB file, 256KB chunks = ceil(1MB/256KB) = 4 chunks
 	return types.InitUploadRequest{

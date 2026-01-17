@@ -56,22 +56,20 @@ func (q *Queries) CompleteFileDownloadByShareId(ctx context.Context, shareID str
 }
 
 const createFile = `-- name: CreateFile :one
-INSERT INTO files (
-    share_id,
-    encrypted_filename,
-    encrypted_mime_type,
-    salt,
-    pbkdf2_iterations,
-    total_size,
-    chunk_count,
-    chunk_size,
-    expires_at,
-    max_downloads,
-    deletion_token_hash,
-    uploader_ip
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
-) RETURNING id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
+INSERT INTO files (share_id,
+                   encrypted_filename,
+                   encrypted_mime_type,
+                   salt,
+                   pbkdf2_iterations,
+                   total_size,
+                   chunk_count,
+                   chunk_size,
+                   expires_at,
+                   max_downloads,
+                   deletion_token_hash,
+                   uploader_ip)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+RETURNING id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
 `
 
 type CreateFileParams struct {
@@ -127,18 +125,54 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 	return i, err
 }
 
-const deleteExpiredFiles = `-- name: DeleteExpiredFiles :exec
-DELETE FROM files
-WHERE expires_at < now() OR (max_downloads <= download_count AND status = 'ready')
+const expireFilesByIds = `-- name: ExpireFilesByIds :exec
+UPDATE files
+SET status = 'expired'
+WHERE id = ANY ($1::uuid[])
 `
 
-func (q *Queries) DeleteExpiredFiles(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredFiles)
+func (q *Queries) ExpireFilesByIds(ctx context.Context, dollar_1 []pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, expireFilesByIds, dollar_1)
 	return err
 }
 
+const getExpiredFiles = `-- name: GetExpiredFiles :many
+SELECT id, chunk_count
+FROM files
+WHERE status != 'expired'
+  AND (
+    expires_at <= now()
+        OR (max_downloads > 0 AND download_count >= max_downloads))
+`
+
+type GetExpiredFilesRow struct {
+	ID         pgtype.UUID `json:"id"`
+	ChunkCount int32       `json:"chunk_count"`
+}
+
+func (q *Queries) GetExpiredFiles(ctx context.Context) ([]GetExpiredFilesRow, error) {
+	rows, err := q.db.Query(ctx, getExpiredFiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetExpiredFilesRow{}
+	for rows.Next() {
+		var i GetExpiredFilesRow
+		if err := rows.Scan(&i.ID, &i.ChunkCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFileByID = `-- name: GetFileByID :one
-SELECT id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip FROM files
+SELECT id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
+FROM files
 WHERE id = $1
 `
 
@@ -168,7 +202,8 @@ func (q *Queries) GetFileByID(ctx context.Context, id pgtype.UUID) (File, error)
 }
 
 const getFileByShareID = `-- name: GetFileByShareID :one
-SELECT id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip FROM files
+SELECT id, share_id, encrypted_filename, encrypted_mime_type, salt, pbkdf2_iterations, total_size, chunk_count, chunk_size, status, created_at, expires_at, last_downloaded_at, max_downloads, download_count, deletion_token_hash, uploader_ip
+FROM files
 WHERE share_id = $1
 `
 
@@ -238,8 +273,7 @@ func (q *Queries) GetFileMetadataByShareId(ctx context.Context, shareID string) 
 }
 
 const getFileSaltByShareId = `-- name: GetFileSaltByShareId :one
-SELECT
-    salt
+SELECT salt
 FROM files
 WHERE share_id = $1
 `

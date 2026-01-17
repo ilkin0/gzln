@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -13,6 +14,7 @@ import (
 	"github.com/ilkin0/gzln/internal/database"
 	"github.com/ilkin0/gzln/internal/logger"
 	custommiddleware "github.com/ilkin0/gzln/internal/middleware"
+	"github.com/ilkin0/gzln/internal/scheduler"
 	"github.com/ilkin0/gzln/internal/service"
 	"github.com/ilkin0/gzln/internal/storage"
 	"github.com/joho/godotenv"
@@ -54,9 +56,15 @@ func main() {
 		slog.String("bucket", minioClient.BucketName),
 	)
 
-	// Initialize FileService
+	// Initialize services
 	fileService := service.NewFileService(db.Queries, runTx, minioClient.Client)
 	chunkService := service.NewChunkService(db.Queries, minioClient.Client, minioClient.BucketName)
+
+	cleanupService := service.NewCleanupService(db.Queries, minioClient.Client, minioClient.BucketName)
+
+	// Start scheduler
+	sched := scheduler.New(cleanupService, 5*time.Minute)
+	sched.Start(ctx)
 
 	// Setup router
 	r := chi.NewRouter()

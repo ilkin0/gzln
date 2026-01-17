@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ilkin0/gzln/internal/repository/sqlc"
+	"github.com/ilkin0/gzln/internal/testutil"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -25,14 +26,6 @@ func (m *MockCleanupQuerier) GetExpiredFiles(ctx context.Context) ([]sqlc.GetExp
 func (m *MockCleanupQuerier) ExpireFilesByIds(ctx context.Context, ids []pgtype.UUID) error {
 	args := m.Called(ctx, ids)
 	return args.Error(0)
-}
-
-func createTestUUIDFrom(t *testing.T, uuidStr string) pgtype.UUID {
-	t.Helper()
-	var id pgtype.UUID
-	err := id.Scan(uuidStr)
-	require.NoError(t, err)
-	return id
 }
 
 func TestCleanupExpiredFiles_NoExpiredFiles(t *testing.T) {
@@ -69,8 +62,8 @@ func TestCleanupExpiredFiles_ExpireFilesByIdsError(t *testing.T) {
 	ctx := context.Background()
 
 	testIDs := []pgtype.UUID{
-		createTestUUIDFrom(t, "550e8400-e29b-41d4-a716-446655440001"),
-		createTestUUIDFrom(t, "550e8400-e29b-41d4-a716-446655440002"),
+		testutil.ParseUUID(t, "550e8400-e29b-41d4-a716-446655440001"),
+		testutil.ParseUUID(t, "550e8400-e29b-41d4-a716-446655440002"),
 	}
 
 	expectedErr := errors.New("failed to update files")
@@ -89,8 +82,8 @@ func TestCleanupExpiredFiles_ExpireFilesByIdsSuccess(t *testing.T) {
 	ctx := context.Background()
 
 	testIDs := []pgtype.UUID{
-		createTestUUIDFrom(t, "550e8400-e29b-41d4-a716-446655440001"),
-		createTestUUIDFrom(t, "550e8400-e29b-41d4-a716-446655440002"),
+		testutil.ParseUUID(t, "550e8400-e29b-41d4-a716-446655440001"),
+		testutil.ParseUUID(t, "550e8400-e29b-41d4-a716-446655440002"),
 	}
 
 	mockQueries.On("ExpireFilesByIds", ctx, testIDs).
@@ -125,9 +118,9 @@ func TestDeleteFileChunks_GeneratesCorrectObjectNames(t *testing.T) {
 
 func TestCollectExpiredFileIds(t *testing.T) {
 	expiredFiles := []sqlc.GetExpiredFilesRow{
-		{ID: createTestUUIDFrom(t, "550e8400-e29b-41d4-a716-446655440001"), ChunkCount: 5},
-		{ID: createTestUUIDFrom(t, "550e8400-e29b-41d4-a716-446655440002"), ChunkCount: 3},
-		{ID: createTestUUIDFrom(t, "550e8400-e29b-41d4-a716-446655440003"), ChunkCount: 10},
+		{ID: testutil.ParseUUID(t, "550e8400-e29b-41d4-a716-446655440001"), ChunkCount: 5},
+		{ID: testutil.ParseUUID(t, "550e8400-e29b-41d4-a716-446655440002"), ChunkCount: 3},
+		{ID: testutil.ParseUUID(t, "550e8400-e29b-41d4-a716-446655440003"), ChunkCount: 10},
 	}
 
 	expiredIds := make([]pgtype.UUID, len(expiredFiles))

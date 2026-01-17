@@ -3,9 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"net/netip"
 	"testing"
-	"time"
 
 	"github.com/ilkin0/gzln/internal/api/types"
 	"github.com/ilkin0/gzln/internal/database"
@@ -27,13 +25,22 @@ func setupTestFileService(t *testing.T) (*FileService, *sqlc.Queries, *database.
 	return fileService, containers.Database.Queries, containers.Database, containers.Cleanup
 }
 
+func createTestFileWithOpts(t *testing.T, queries *sqlc.Queries, ctx context.Context, maxDownloads, chunkCount int32) sqlc.File {
+	t.Helper()
+	opts := testutil.DefaultTestFileOptions()
+	opts.MaxDownloads = maxDownloads
+	opts.ChunkCount = chunkCount
+	opts.TotalSize = int64(chunkCount) * int64(opts.ChunkSize)
+	return testutil.CreateTestFile(t, queries, ctx, opts)
+}
+
 func TestCompleteDownload_Integration_Success(t *testing.T) {
 	fileService, queries, _, cleanup := setupTestFileService(t)
 	defer cleanup()
 
 	ctx := context.Background()
 
-	file := createTestFile(t, queries, ctx, 5, 10)
+	file := createTestFileWithOpts(t, queries, ctx, 5, 10)
 
 	err := fileService.CompleteDownload(ctx, file.ShareID)
 	require.NoError(t, err)
@@ -49,7 +56,7 @@ func TestCompleteDownload_Integration_LimitReached(t *testing.T) {
 
 	ctx := context.Background()
 
-	file := createTestFile(t, queries, ctx, 1, 1)
+	file := createTestFileWithOpts(t, queries, ctx, 1, 1)
 
 	err := fileService.CompleteDownload(ctx, file.ShareID)
 	require.NoError(t, err)
@@ -70,7 +77,7 @@ func TestCompleteDownload_Integration_FileExpired(t *testing.T) {
 
 	ctx := context.Background()
 
-	file := createExpiredFile(t, queries, db, ctx)
+	file := testutil.CreateExpiredFile(t, queries, db, ctx)
 
 	err := fileService.CompleteDownload(ctx, file.ShareID)
 	require.Error(t, err)
@@ -94,7 +101,7 @@ func TestCompleteDownload_Integration_MultipleDownloads(t *testing.T) {
 
 	ctx := context.Background()
 
-	file := createTestFile(t, queries, ctx, 3, 10)
+	file := createTestFileWithOpts(t, queries, ctx, 3, 10)
 
 	err := fileService.CompleteDownload(ctx, file.ShareID)
 	require.NoError(t, err)
@@ -122,7 +129,7 @@ func TestCompleteDownload_Integration_ConcurrentAccess(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test file with 3 max downloads
-	file := createTestFile(t, queries, ctx, 3, 10)
+	file := createTestFileWithOpts(t, queries, ctx, 3, 10)
 
 	// Launch 10 concurrent goroutines trying to complete downloads
 	concurrentRequests := 10
@@ -164,7 +171,7 @@ func TestCompleteDownload_Integration_ConcurrentAccessSingleLimit(t *testing.T) 
 	ctx := context.Background()
 
 	// Create a test file with 1 max download
-	file := createTestFile(t, queries, ctx, 1, 5)
+	file := createTestFileWithOpts(t, queries, ctx, 1, 5)
 
 	// Launch 5 concurrent goroutines trying to complete downloads
 	concurrentRequests := 5
@@ -285,56 +292,4 @@ func TestFinalizeUpload_Integration_ChunkCountMismatch(t *testing.T) {
 	_, err = fileService.FinalizeUpload(ctx, fileID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "chunk count does not match")
-}
-
-func createTestFile(t *testing.T, queries *sqlc.Queries, ctx context.Context, maxDownloads, chunkCount int32) sqlc.File {
-	t.Helper()
-
-	shareID := generateShareID()
-
-	file, err := queries.CreateFile(ctx, sqlc.CreateFileParams{
-		ShareID:           shareID,
-		EncryptedFilename: "encrypted-test-file",
-		EncryptedMimeType: "encrypted-mime",
-		Salt:              "test-salt",
-		Pbkdf2Iterations:  100000,
-		TotalSize:         1024 * 1024,
-		ChunkCount:        chunkCount,
-		ChunkSize:         256 * 1024,
-		ExpiresAt: pgtype.Timestamptz{
-			Time:  time.Now().Add(24 * time.Hour),
-			Valid: true,
-		},
-		MaxDownloads:      maxDownloads,
-		DeletionTokenHash: pgtype.Text{String: "token-hash", Valid: true},
-		UploaderIp:        netip.MustParseAddr("192.168.1.1"),
-	})
-	require.NoError(t, err)
-
-	file, err = queries.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
-		ID:     file.ID,
-		Status: "ready",
-	})
-	require.NoError(t, err)
-
-	return file
-}
-
-func createExpiredFile(t *testing.T, queries *sqlc.Queries, db *database.Database, ctx context.Context) sqlc.File {
-	t.Helper()
-
-	file := createTestFile(t, queries, ctx, 5, 4)
-
-	now := time.Now()
-	_, err := db.Pool.Exec(ctx, `
-		UPDATE files
-		SET created_at = $1, expires_at = $2
-		WHERE id = $3
-	`, now.Add(-2*time.Hour), now.Add(-1*time.Hour), file.ID)
-	require.NoError(t, err)
-
-	file, err = queries.GetFileByID(ctx, file.ID)
-	require.NoError(t, err)
-
-	return file
 }

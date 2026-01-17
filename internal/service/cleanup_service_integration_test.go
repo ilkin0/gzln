@@ -5,13 +5,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/netip"
 	"testing"
-	"time"
 
+	"github.com/ilkin0/gzln/internal/database"
 	"github.com/ilkin0/gzln/internal/repository/sqlc"
 	"github.com/ilkin0/gzln/internal/testutil"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,6 +18,7 @@ import (
 type cleanupTestEnv struct {
 	cleanupService *CleanupService
 	queries        *sqlc.Queries
+	db             *database.Database
 	minioClient    *minio.Client
 	bucketName     string
 }
@@ -38,123 +37,10 @@ func setupCleanupTestEnv(t *testing.T) (*cleanupTestEnv, func()) {
 	return &cleanupTestEnv{
 		cleanupService: cleanupService,
 		queries:        containers.Database.Queries,
+		db:             containers.Database,
 		minioClient:    containers.MinioClient.Client,
 		bucketName:     containers.MinioClient.BucketName,
 	}, containers.Cleanup
-}
-
-func createExpiredFile2(t *testing.T, queries *sqlc.Queries, ctx context.Context) sqlc.File {
-	t.Helper()
-
-	file, err := queries.CreateFile(ctx, sqlc.CreateFileParams{
-		ShareID:           fmt.Sprintf("exp%08d", time.Now().UnixNano()%100000000),
-		EncryptedFilename: "encrypted-filename",
-		EncryptedMimeType: "encrypted-mime",
-		Salt:              "test-salt",
-		Pbkdf2Iterations:  100000,
-		TotalSize:         1024,
-		ChunkCount:        2,
-		ChunkSize:         512,
-		ExpiresAt: pgtype.Timestamptz{
-			Time:  time.Now().Add(-1 * time.Hour),
-			Valid: true,
-		},
-		MaxDownloads:      5,
-		DeletionTokenHash: pgtype.Text{String: "deletion-token", Valid: true},
-		UploaderIp:        netip.MustParseAddr("127.0.0.1"),
-	})
-	require.NoError(t, err)
-
-	file, err = queries.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
-		ID:     file.ID,
-		Status: "ready",
-	})
-	require.NoError(t, err)
-
-	return file
-}
-
-func createActiveFile(t *testing.T, queries *sqlc.Queries, ctx context.Context) sqlc.File {
-	t.Helper()
-
-	file, err := queries.CreateFile(ctx, sqlc.CreateFileParams{
-		ShareID:           fmt.Sprintf("act%09d", time.Now().UnixNano()%1000000000)[:12],
-		EncryptedFilename: "encrypted-filename",
-		EncryptedMimeType: "encrypted-mime",
-		Salt:              "test-salt",
-		Pbkdf2Iterations:  100000,
-		TotalSize:         1024,
-		ChunkCount:        2,
-		ChunkSize:         512,
-		ExpiresAt: pgtype.Timestamptz{
-			Time:  time.Now().Add(24 * time.Hour),
-			Valid: true,
-		},
-		MaxDownloads:      5,
-		DeletionTokenHash: pgtype.Text{String: "deletion-token", Valid: true},
-		UploaderIp:        netip.MustParseAddr("127.0.0.1"),
-	})
-	require.NoError(t, err)
-
-	file, err = queries.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
-		ID:     file.ID,
-		Status: "ready",
-	})
-	require.NoError(t, err)
-
-	return file
-}
-
-func createMaxedDownloadsFile(t *testing.T, queries *sqlc.Queries, ctx context.Context) sqlc.File {
-	t.Helper()
-
-	file, err := queries.CreateFile(ctx, sqlc.CreateFileParams{
-		ShareID:           fmt.Sprintf("max%09d", time.Now().UnixNano()%1000000000)[:12],
-		EncryptedFilename: "encrypted-filename",
-		EncryptedMimeType: "encrypted-mime",
-		Salt:              "test-salt",
-		Pbkdf2Iterations:  100000,
-		TotalSize:         1024,
-		ChunkCount:        2,
-		ChunkSize:         512,
-		ExpiresAt: pgtype.Timestamptz{
-			Time:  time.Now().Add(24 * time.Hour), // Not expired by time
-			Valid: true,
-		},
-		MaxDownloads:      3,
-		DeletionTokenHash: pgtype.Text{String: "deletion-token", Valid: true},
-		UploaderIp:        netip.MustParseAddr("127.0.0.1"),
-	})
-	require.NoError(t, err)
-
-	file, err = queries.UpdateFileStatus(ctx, sqlc.UpdateFileStatusParams{
-		ID:     file.ID,
-		Status: "ready",
-	})
-	require.NoError(t, err)
-
-	for i := 0; i < 3; i++ {
-		_, err = queries.CompleteFileDownloadByShareId(ctx, file.ShareID)
-		require.NoError(t, err)
-	}
-
-	file, err = queries.GetFileByID(ctx, file.ID)
-	require.NoError(t, err)
-
-	return file
-}
-
-func uploadTestChunks(t *testing.T, minioClient *minio.Client, bucketName string, fileID string, chunkCount int) {
-	t.Helper()
-	ctx := context.Background()
-
-	for i := 0; i < chunkCount; i++ {
-		objectName := fmt.Sprintf("%s/%d.enc", fileID, i)
-		data := []byte(fmt.Sprintf("chunk data %d", i))
-
-		_, err := minioClient.PutObject(ctx, bucketName, objectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{})
-		require.NoError(t, err)
-	}
 }
 
 func TestCleanupExpiredFiles_Integration_NoExpiredFiles(t *testing.T) {
@@ -163,8 +49,8 @@ func TestCleanupExpiredFiles_Integration_NoExpiredFiles(t *testing.T) {
 
 	ctx := context.Background()
 
-	activeFile := createActiveFile(t, env.queries, ctx)
-	uploadTestChunks(t, env.minioClient, env.bucketName, activeFile.ID.String(), 2)
+	activeFile := testutil.CreateReadyFile(t, env.queries, ctx)
+	testutil.UploadTestChunks(t, env.minioClient, env.bucketName, activeFile.ID.String(), int(activeFile.ChunkCount))
 
 	deleted, err := env.cleanupService.CleanupExpiredFiles(ctx)
 
@@ -175,7 +61,7 @@ func TestCleanupExpiredFiles_Integration_NoExpiredFiles(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ready", file.Status)
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < int(activeFile.ChunkCount); i++ {
 		objectName := fmt.Sprintf("%s/%d.enc", activeFile.ID.String(), i)
 		_, err := env.minioClient.StatObject(ctx, env.bucketName, objectName, minio.StatObjectOptions{})
 		require.NoError(t, err, "Chunk %d should still exist", i)
@@ -188,8 +74,8 @@ func TestCleanupExpiredFiles_Integration_ExpiredByTime(t *testing.T) {
 
 	ctx := context.Background()
 
-	expiredFile := createExpiredFile2(t, env.queries, ctx)
-	uploadTestChunks(t, env.minioClient, env.bucketName, expiredFile.ID.String(), 2)
+	expiredFile := testutil.CreateExpiredFile(t, env.queries, env.db, ctx)
+	testutil.UploadTestChunks(t, env.minioClient, env.bucketName, expiredFile.ID.String(), int(expiredFile.ChunkCount))
 
 	deleted, err := env.cleanupService.CleanupExpiredFiles(ctx)
 
@@ -200,7 +86,7 @@ func TestCleanupExpiredFiles_Integration_ExpiredByTime(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "expired", file.Status)
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < int(expiredFile.ChunkCount); i++ {
 		objectName := fmt.Sprintf("%s/%d.enc", expiredFile.ID.String(), i)
 		_, err := env.minioClient.StatObject(ctx, env.bucketName, objectName, minio.StatObjectOptions{})
 		require.Error(t, err, "Chunk %d should be deleted", i)
@@ -213,8 +99,8 @@ func TestCleanupExpiredFiles_Integration_ExpiredByDownloadCount(t *testing.T) {
 
 	ctx := context.Background()
 
-	maxedFile := createMaxedDownloadsFile(t, env.queries, ctx)
-	uploadTestChunks(t, env.minioClient, env.bucketName, maxedFile.ID.String(), 2)
+	maxedFile := testutil.CreateMaxedDownloadsFile(t, env.queries, ctx)
+	testutil.UploadTestChunks(t, env.minioClient, env.bucketName, maxedFile.ID.String(), int(maxedFile.ChunkCount))
 
 	deleted, err := env.cleanupService.CleanupExpiredFiles(ctx)
 
@@ -225,7 +111,7 @@ func TestCleanupExpiredFiles_Integration_ExpiredByDownloadCount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "expired", file.Status)
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < int(maxedFile.ChunkCount); i++ {
 		objectName := fmt.Sprintf("%s/%d.enc", maxedFile.ID.String(), i)
 		_, err := env.minioClient.StatObject(ctx, env.bucketName, objectName, minio.StatObjectOptions{})
 		require.Error(t, err, "Chunk %d should be deleted", i)
@@ -238,13 +124,13 @@ func TestCleanupExpiredFiles_Integration_MultipleExpiredFiles(t *testing.T) {
 
 	ctx := context.Background()
 
-	expiredFile1 := createExpiredFile2(t, env.queries, ctx)
-	expiredFile2 := createExpiredFile2(t, env.queries, ctx)
-	activeFile := createActiveFile(t, env.queries, ctx)
+	expiredFile1 := testutil.CreateExpiredFile(t, env.queries, env.db, ctx)
+	expiredFile2 := testutil.CreateExpiredFile(t, env.queries, env.db, ctx)
+	activeFile := testutil.CreateReadyFile(t, env.queries, ctx)
 
-	uploadTestChunks(t, env.minioClient, env.bucketName, expiredFile1.ID.String(), 2)
-	uploadTestChunks(t, env.minioClient, env.bucketName, expiredFile2.ID.String(), 2)
-	uploadTestChunks(t, env.minioClient, env.bucketName, activeFile.ID.String(), 2)
+	testutil.UploadTestChunks(t, env.minioClient, env.bucketName, expiredFile1.ID.String(), int(expiredFile1.ChunkCount))
+	testutil.UploadTestChunks(t, env.minioClient, env.bucketName, expiredFile2.ID.String(), int(expiredFile2.ChunkCount))
+	testutil.UploadTestChunks(t, env.minioClient, env.bucketName, activeFile.ID.String(), int(activeFile.ChunkCount))
 
 	deleted, err := env.cleanupService.CleanupExpiredFiles(ctx)
 
@@ -259,7 +145,7 @@ func TestCleanupExpiredFiles_Integration_MultipleExpiredFiles(t *testing.T) {
 	assert.Equal(t, "expired", file2.Status)
 	assert.Equal(t, "ready", activeFileAfter.Status)
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < int(activeFile.ChunkCount); i++ {
 		objectName := fmt.Sprintf("%s/%d.enc", activeFile.ID.String(), i)
 		_, err := env.minioClient.StatObject(ctx, env.bucketName, objectName, minio.StatObjectOptions{})
 		require.NoError(t, err, "Active file chunk %d should still exist", i)
@@ -272,10 +158,9 @@ func TestCleanupExpiredFiles_Integration_ChunksDeletedFromMinIO(t *testing.T) {
 
 	ctx := context.Background()
 
-	expiredFile := createExpiredFile2(t, env.queries, ctx)
+	expiredFile := testutil.CreateExpiredFile(t, env.queries, env.db, ctx)
 
-	// Upload chunks to MinIO
-	chunkCount := 5
+	chunkCount := int(expiredFile.ChunkCount)
 	for i := 0; i < chunkCount; i++ {
 		objectName := fmt.Sprintf("%s/%d.enc", expiredFile.ID.String(), i)
 		data := []byte(fmt.Sprintf("encrypted chunk data %d with some content", i))
